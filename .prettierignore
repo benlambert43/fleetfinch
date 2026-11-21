@@ -1,0 +1,10 @@
+package-lock.json
+package.json
+
+.next/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+fleetfinch-server/drizzle/
+fleetfinch-desktop/.vite/
+fleetfinch-desktop/out/
