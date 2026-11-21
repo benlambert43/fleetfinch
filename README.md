@@ -169,12 +169,41 @@ A feature runs through these layers, from the database to the components.
 - **The web app supplies data from the server.** Server components load data through the API client in `app/_lib/api.ts` and hand it to the shared components.
 - **The desktop app supplies data from the window.** Components in `fleetfinch-desktop/src/renderer` load data through the API client in `src/renderer/api.ts`, which calls the API directly.
 - **`"use client"` where needed.** Components with state or event handlers start with it, which lets the App Router render them from server components. The others have no directive, so they can render on the server as well.
-- **One theme.** `src/theme.css` is the one place for colors and fonts, and it tells Tailwind to scan the package for class names. Each app's `globals.css` imports it after `tailwindcss` and provides the fonts behind `--font-geist-sans` and `--font-geist-mono` in its own way.
+- **One theme.** `src/theme.css` is the one place for colors and fonts, and it tells Tailwind to scan the package for class names. Each app's `globals.css` imports it after `tailwindcss` and provides the fonts behind the variables listed under [Fonts](#fonts) in its own way.
 - **No build step.** The apps compile the package from source, as they do `@fleetfinch/shared`, so an edit hot-reloads in every app that is running.
 - **Linted like the web app.** The web app gets its React and accessibility rules from `eslint-config-next`. React code outside it is held to the React, hooks, and accessibility rule sets of the same plugins, and may not use Node.js globals.
 - **Tests beside the components.** They run in jsdom with Testing Library; `npm run test:ui` runs them alone.
 
 A component belongs in `fleetfinch-ui` when more than one app shows it, or could. Create it in `src`, export it from `src/index.ts`, and import it from `@fleetfinch/ui`. Pages and the components that load data stay in the app they belong to.
+
+## Fonts
+
+`fleetfinch-ui/src/theme.css` has a Tailwind font utility for each typeface that [iOS 7 added](https://thomasdenney.co.uk/blog/2013/10/8/new-fonts-in-ios-7/). Each one names the Apple font first, which iOS and macOS have installed, then the closest free Google font, which each app supplies under the variable in the last column. Three of them are also Tailwind's defaults, which its base styles apply to the page and to code: `font-sans` is Helvetica Neue, `font-serif` is Iowan Old Style, and `font-mono` is Menlo.
+
+- **The web app** loads them with `next/font/google` in `app/_lib/fonts.ts`. It preloads Inter, the page font wherever Helvetica Neue is missing; any other font downloads only when a page uses it.
+- **The preview image** has no Apple fonts on the server that draws it, so `app/opengraph-image.tsx` draws its text in Inter, from the Latin subset in `fleetfinch-web/assets`, beside the font's license.
+- **The desktop app** bundles them from the Fontsource packages that `src/renderer/globals.css` imports.
+- **`fleetfinch-lite`** sets its page in Helvetica Neue and has a class of the same name for each in `public/styles.css`. It ships no font files: every iOS 9 device has the Apple fonts, and Safari 9 cannot read the WOFF2, variable, and `unicode-range` fonts that Google serves.
+
+| Utility                    | Apple font (styles new in iOS 7)                     | Google font               | Variable                       |
+| -------------------------- | ---------------------------------------------------- | ------------------------- | ------------------------------ |
+| `font-al-nile`             | Al Nile (Regular, Bold)                              | Noto Naskh Arabic         | `--font-noto-naskh-arabic`     |
+| `font-apple-sd-gothic-neo` | Apple SD Gothic Neo (Thin, Light, Regular, SemiBold) | Noto Sans KR              | `--font-noto-sans-kr`          |
+| `font-arial-hebrew`        | Arial Hebrew (Light)                                 | Noto Sans Hebrew          | `--font-noto-sans-hebrew`      |
+| `font-damascus`            | Damascus (Regular, Medium, SemiBold, Bold)           | Noto Sans Arabic          | `--font-noto-sans-arabic`      |
+| `font-din-alternate`       | DIN Alternate (Bold)                                 | Barlow 700                | `--font-barlow`                |
+| `font-din-condensed`       | DIN Condensed (Bold)                                 | Saira Extra Condensed 700 | `--font-saira-extra-condensed` |
+| `font-diwan-mishafi`       | Diwan Mishafi, called Mishafi on macOS               | Amiri Quran               | `--font-amiri-quran`           |
+| `font-farah`               | Farah                                                | Katibeh                   | `--font-katibeh`               |
+| `font-geeza-pro`           | Geeza Pro (Light)                                    | Vazirmatn                 | `--font-vazirmatn`             |
+| `font-helvetica-neue`      | Helvetica Neue (Thin, Thin Italic, Medium Italic)    | Inter                     | `--font-inter`                 |
+| `font-iowan-old-style`     | Iowan Old Style (Roman, Italic, Bold, Bold Italic)   | Spectral 400 and 700      | `--font-spectral`              |
+| `font-menlo`               | Menlo (Regular, Italic, Bold, Bold Italic)           | Noto Sans Mono            | `--font-noto-sans-mono`        |
+| `font-savoye-let`          | Savoye LET                                           | Tangerine 400             | `--font-tangerine`             |
+| `font-superclarendon`      | Superclarendon (Light to Black, with italics)        | Besley                    | `--font-besley`                |
+| `font-thonburi`            | Thonburi (Light)                                     | Noto Sans Thai Looped     | `--font-noto-sans-thai-looped` |
+
+Two substitutes fall short of their Apple font. Besley starts at Regular, so Superclarendon Light falls back to it. Noto Sans Mono has no italic, so the browser slants the upright, as Menlo's italic does.
 
 ## Search engines and link previews
 
@@ -185,7 +214,7 @@ The web app describes itself to search engines and to the apps that show a previ
 | `app/_lib/site.ts`        | Holds the name and the description, which the layout, the home page, and the preview image all read, and `siteUrl()`, the public address from `SITE_URL`                                                                        |
 | `app/layout.tsx`          | Sets what every page shares: the base address, the title and its template, the description, and the Open Graph and Twitter card settings. A page whose `metadata` has a `title` of `About` is titled "About \| FleetFinch"      |
 | `app/page.tsx`            | States its own address in `alternates.canonical` and `openGraph.url`, and spreads `siteOpenGraph` into the latter, because a page's `openGraph` replaces the layout's instead of merging with it. Do the same in every new page |
-| `app/opengraph-image.tsx` | Draws the 1200 by 630 preview image, which Next.js attaches to every page for Open Graph and Twitter. An `opengraph-image.tsx` in a route's folder gives that route its own                                                     |
+| `app/opengraph-image.tsx` | Draws the 1200 by 630 preview image in Inter, which Next.js attaches to every page for Open Graph and Twitter. An `opengraph-image.tsx` in a route's folder gives that route its own                                            |
 | `app/robots.ts`           | Lets crawlers in and points them at the sitemap                                                                                                                                                                                 |
 | `app/sitemap.ts`          | Lists the pages. Add each new public page to it                                                                                                                                                                                 |
 
@@ -271,7 +300,7 @@ The bridge is for what only the main process can do, such as reading the app ver
 - **Port 5173.** The dev server is fixed to it, because that address is on the API's list.
 - **Imports** inside the app start from `src` with `@/`, as they start from the app folder in the web app. Stack traces from the main process point at the TypeScript source.
 - **One copy runs.** A second launch brings the first one's window forward. The app started by `npm run dev:desktop` keeps its own data folder, with `(development)` after the name, so it runs beside an installed copy.
-- **Fast startup.** Each process loads one bundled file, compiled for the Chromium and Node.js that Electron ships rather than for older browsers. Geist is bundled instead of fetched, `app://` is registered so that V8 keeps the window's compiled script from the first launch on, and the window opens at once in the page's background color.
+- **Fast startup.** Each process loads one bundled file, compiled for the Chromium and Node.js that Electron ships rather than for older browsers. The [fonts](#fonts) are bundled instead of fetched, `app://` is registered so that V8 keeps the window's compiled script from the first launch on, and the window opens at once in the page's background color.
 - **The default application menu stays**, because on macOS it is what makes copy, paste, and undo work in text fields. Replace it with your own rather than removing it.
 - **Electron's binary** is not downloaded by `npm install`. The `electron` package fetches it the first time the app is started or packaged, and caches it for later installs.
 - **`@types/node` is held at 24** here because Electron 45 embeds Node.js 24, whatever runs the rest of the repository. Dependabot leaves major versions of `@types/node` alone for that reason, so raise this one by hand when an Electron upgrade brings a newer Node.js.

@@ -1,9 +1,40 @@
 @import "tailwindcss";
 @import "@fleetfinch/ui/theme.css";
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/noto-naskh-arabic";
+@import "@fontsource-variable/noto-sans-kr";
+@import "@fontsource-variable/noto-sans-hebrew";
+@import "@fontsource-variable/noto-sans-arabic";
+@import "@fontsource/barlow/700.css";
+@import "@fontsource/saira-extra-condensed/700.css";
+@import "@fontsource/amiri-quran/400.css";
+@import "@fontsource/katibeh/400.css";
+@import "@fontsource-variable/vazirmatn";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/inter/wght-italic.css";
+@import "@fontsource/spectral/400.css";
+@import "@fontsource/spectral/400-italic.css";
+@import "@fontsource/spectral/700.css";
+@import "@fontsource/spectral/700-italic.css";
+@import "@fontsource-variable/noto-sans-mono";
+@import "@fontsource/tangerine/400.css";
+@import "@fontsource-variable/besley";
+@import "@fontsource-variable/besley/wght-italic.css";
+@import "@fontsource-variable/noto-sans-thai-looped";
 
 :root {
-  --font-geist-sans: "Geist Variable", system-ui, sans-serif;
-  --font-geist-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-noto-naskh-arabic: "Noto Naskh Arabic Variable";
+  --font-noto-sans-kr: "Noto Sans KR Variable";
+  --font-noto-sans-hebrew: "Noto Sans Hebrew Variable";
+  --font-noto-sans-arabic: "Noto Sans Arabic Variable";
+  --font-barlow: "Barlow";
+  --font-saira-extra-condensed: "Saira Extra Condensed";
+  --font-amiri-quran: "Amiri Quran";
+  --font-katibeh: "Katibeh";
+  --font-vazirmatn: "Vazirmatn Variable";
+  --font-inter: "Inter Variable";
+  --font-spectral: "Spectral";
+  --font-noto-sans-mono: "Noto Sans Mono Variable";
+  --font-tangerine: "Tangerine";
+  --font-besley: "Besley Variable";
+  --font-noto-sans-thai-looped: "Noto Sans Thai Looped Variable";
 }
