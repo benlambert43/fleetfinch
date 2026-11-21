@@ -1,8 +1,6 @@
 import { AppShell } from "@fleetfinch/ui";
 import type { Metadata } from "next";
 
-import { Notes } from "@/app/_components/Notes.tsx";
-import { StatusChecks } from "@/app/_components/StatusChecks.tsx";
 import { site, siteOpenGraph } from "@/app/_lib/site.ts";
 
 export const metadata: Metadata = {
@@ -11,10 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return (
-    <AppShell title={site.name} description={site.description}>
-      <Notes />
-      <StatusChecks />
-    </AppShell>
-  );
+  return <AppShell title={site.name} description={site.description} />;
 }

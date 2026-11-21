@@ -77,7 +77,7 @@ To change the schema, edit `schema.ts`, then run `db:generate` and `db:migrate`.
 
 ```sh
 npm run db:generate --workspace fleetfinch-server -- --name add_tags              # names the migration file
-npm run db:generate --workspace fleetfinch-server -- --custom --name seed_notes   # empty migration for SQL of your own
+npm run db:generate --workspace fleetfinch-server -- --custom --name seed_data    # empty migration for SQL of your own
 npm run db:studio --workspace fleetfinch-server -- --port 5000                    # Drizzle Studio on another port
 ```
 
@@ -106,15 +106,15 @@ The pre-commit hook runs lint-staged on the staged files: every workspace is typ
 
 | Command                 | What it does                                                                                    |
 | ----------------------- | ----------------------------------------------------------------------------------------------- |
-| `npm test`              | Runs Vitest once across every workspace                                                         |
+| `npm test`              | Runs Vitest once across every workspace; a workspace with no tests yet passes                   |
 | `npm run test:watch`    | Reruns tests as files change                                                                    |
 | `npm run test:coverage` | Reports coverage in the terminal and as HTML in `coverage/`                                     |
 | `npm run test:shared`   | Runs one workspace; the others have a script of their own, such as `test:server` and `test:web` |
 
 ```sh
-npm test -- fleetfinch-shared/src/notes.test.ts   # one file
+npm test -- fleetfinch-ui/src/AppShell.test.tsx    # one file
 npm test -- -t "Hello World"                    # tests whose name matches
-npm run test:watch -- --project fleetfinch-web    # watches one workspace
+npm run test:watch -- --project fleetfinch-ui     # watches one workspace
 ```
 
 ### Cleaning up
@@ -132,46 +132,40 @@ npm run clean:dry-run -- --force   # lists what clean:force would remove
 
 ## API
 
-`fleetfinch-server` serves JSON on `http://localhost:4000`. Every route but the health check reads or writes the `notes` table. Errors are JSON as well, in the form `{"error": "..."}`: 404 for an unknown route, 400 for a body that is not valid JSON, and 500 for a failure the API did not expect, which it logs.
+`fleetfinch-server` serves JSON on `http://localhost:4000`. Errors are JSON as well, in the form `{"error": "..."}`: 404 for an unknown route, 400 for a body that is not valid JSON, and 500 for a failure the API did not expect, which it logs.
 
-| Route                      | What it does                                                                                                                |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/health`       | Reports whether the API reaches the database; answers 503 when it does not                                                  |
-| `GET /api/v1/notes`        | Lists the notes, newest first                                                                                               |
-| `POST /api/v1/notes`       | Creates a note from `{"body": "..."}` and answers 201 with it, or 400 when the body is empty or longer than 1000 characters |
-| `PATCH /api/v1/notes/:id`  | Replaces a note's body, under the same rules; 404 for an unknown id                                                         |
-| `DELETE /api/v1/notes/:id` | Deletes a note and answers 204; 404 for an unknown id                                                                       |
+| Route                | What it does                                                               |
+| -------------------- | -------------------------------------------------------------------------- |
+| `GET /api/v1/health` | Reports whether the API reaches the database; answers 503 when it does not |
 
 ```sh
 curl http://localhost:4000/api/v1/health
-curl http://localhost:4000/api/v1/notes
-curl -X POST http://localhost:4000/api/v1/notes -H 'content-type: application/json' -d '{"body":"Hello World"}'
 ```
 
 ## Where the code lives
 
-The notes page is a worked example of the whole path, from the database to the components.
+A feature runs through these layers, from the database to the components.
 
-| Layer                                      | Where                                                                         |
-| ------------------------------------------ | ----------------------------------------------------------------------------- |
-| Table and migrations                       | `fleetfinch-server/src/schema.ts` and `fleetfinch-server/drizzle`             |
-| Routes                                     | `fleetfinch-server/src/notes.ts`, mounted in `src/index.ts`                   |
-| Error responses                            | `fleetfinch-server/src/errors.ts`                                             |
-| Server environment                         | `fleetfinch-server/src/serverEnv.ts`, parsed with Zod when the API starts     |
-| Schemas and types                          | `fleetfinch-shared/src/notes.ts` and `src/health.ts`                          |
-| API client                                 | `fleetfinch-shared/src/apiClient.ts`                                          |
-| Form logic                                 | `fleetfinch-shared/src/noteActions.ts`                                        |
-| Components and theme                       | `fleetfinch-ui/src`                                                           |
-| Web page, data loading, and server actions | `fleetfinch-web/app/page.tsx`, `app/_components`, and `app/_actions/notes.ts` |
+| Layer                      | Where                                                                     |
+| -------------------------- | ------------------------------------------------------------------------- |
+| Tables and migrations      | `fleetfinch-server/src/schema.ts` and `fleetfinch-server/drizzle`         |
+| Routes                     | `fleetfinch-server/src/index.ts`                                          |
+| Database health check      | `fleetfinch-server/src/health.ts`                                         |
+| Error responses            | `fleetfinch-server/src/errors.ts`                                         |
+| Server environment         | `fleetfinch-server/src/serverEnv.ts`, parsed with Zod when the API starts |
+| Schemas and types          | `fleetfinch-shared/src/health.ts`                                         |
+| API client                 | `fleetfinch-shared/src/apiClient.ts`                                      |
+| Components and theme       | `fleetfinch-ui/src`                                                       |
+| Web pages and data loading | `fleetfinch-web/app`, with the API client in `app/_lib/api.ts`            |
 
 ## Shared components
 
 `fleetfinch-ui` holds the components that look and behave the same wherever they are shown. An app only decides what data they get and what happens when they are used.
 
 - **Props only.** Components take their data and their actions as props. They never fetch, read the environment, or import a framework, and ESLint refuses `next` and `node:` imports in the package.
-- **Logic sits beside the schemas.** In `fleetfinch-shared`, `submitNewNote`, `submitNoteEdit`, and `submitNoteDelete` parse the input, call the API, and return failures as values, and `createApiClient` builds the client that each app gives its API address. The package runs in Node.js and in browser windows alike, so ESLint refuses browser-only globals there.
-- **The web app supplies data from the server.** `app/_components/Notes.tsx` loads the notes in a server component and passes the server actions in `app/_actions/notes.ts`, which refresh the page after a change. The rules for a note stay in the API.
-- **The desktop app supplies data from the window.** `fleetfinch-desktop/src/renderer/Notes.tsx` fetches the notes itself and passes functions that call the API directly.
+- **Logic sits beside the schemas.** In `fleetfinch-shared`, `createApiClient` builds the client that each app gives its API address. The package runs in Node.js and in browser windows alike, so ESLint refuses browser-only globals there.
+- **The web app supplies data from the server.** Server components load data through the API client in `app/_lib/api.ts` and hand it to the shared components.
+- **The desktop app supplies data from the window.** Components in `fleetfinch-desktop/src/renderer` load data through the API client in `src/renderer/api.ts`, which calls the API directly.
 - **`"use client"` where needed.** Components with state or event handlers start with it, which lets the App Router render them from server components. The others have no directive, so they can render on the server as well.
 - **One theme.** `src/theme.css` is the one place for colors and fonts, and it tells Tailwind to scan the package for class names. Each app's `globals.css` imports it after `tailwindcss` and provides the fonts behind `--font-geist-sans` and `--font-geist-mono` in its own way.
 - **No build step.** The apps compile the package from source, as they do `@fleetfinch/shared`, so an edit hot-reloads in every app that is running.
@@ -231,7 +225,7 @@ window → window.bridge → preload script → IPC → main process
 ### Commands
 
 ```sh
-npm run dev:server      # the window shows data only while the API runs
+npm run dev:server      # the API, which the window calls directly
 npm run dev:desktop     # starts the app; press r in this terminal to restart the main process
 npm run test:desktop    # runs its tests alone
 npm run build:desktop   # packages an unsigned app for this machine
@@ -250,18 +244,17 @@ VITE_API_BASE_URL=https://api.example.com npm run make:desktop   # a release tha
 
 Paths are inside `fleetfinch-desktop`.
 
-| File                                         | What it holds                                                                                                                    |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `src/renderer/api.ts`                        | The shared API client, pointed at `VITE_API_BASE_URL`                                                                            |
-| `src/renderer/Notes.tsx`, `StatusChecks.tsx` | Load the data and hand it to the shared components                                                                               |
-| `src/env.ts`                                 | The environment, parsed with Zod when the app starts                                                                             |
-| `src/bridge.ts`                              | The `Bridge` interface, which lists every call the window can make to the main process; the two files below are typed against it |
-| `src/preload/index.ts`                       | Exposes one function per `Bridge` method as `window.bridge`, and nothing else                                                    |
-| `src/main/handlers.ts`                       | Implements each method                                                                                                           |
-| `src/main/index.ts`                          | The window, and the security rules listed below                                                                                  |
-| `forge.config.ts`                            | Electron Forge: packaging, the Vite builds, and the fuses                                                                        |
+| File                   | What it holds                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/renderer/api.ts`  | The shared API client, pointed at `VITE_API_BASE_URL`                                                                            |
+| `src/env.ts`           | The environment, parsed with Zod when the app starts                                                                             |
+| `src/bridge.ts`        | The `Bridge` interface, which lists every call the window can make to the main process; the two files below are typed against it |
+| `src/preload/index.ts` | Exposes one function per `Bridge` method as `window.bridge`, and nothing else                                                    |
+| `src/main/handlers.ts` | Implements each method                                                                                                           |
+| `src/main/index.ts`    | The window, and the security rules listed below                                                                                  |
+| `forge.config.ts`      | Electron Forge: packaging, the Vite builds, and the fuses                                                                        |
 
-The bridge is for what only the main process can do, such as the app version it reports today. To add a call, add it to `Bridge`. TypeScript then fails until the preload script exposes it and `handlers.ts` implements it.
+The bridge is for what only the main process can do, such as reading the app version, its one call today. To add a call, add it to `Bridge`. TypeScript then fails until the preload script exposes it and `handlers.ts` implements it.
 
 ### Configuration
 

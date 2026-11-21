@@ -11,10 +11,6 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@fleetfinch/shared": "*",
-    "@heroicons/react": "^2.2.0"
-  },
   "peerDependencies": {
     "react": "^19.0.0"
   },

@@ -7,7 +7,7 @@ export function AppShell({
 }: {
   title: string;
   description: string;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <main
