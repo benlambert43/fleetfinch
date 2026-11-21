@@ -3,22 +3,25 @@
 The web app's home page written for Safari 9, the browser on iOS 9: Safari 9.0 up to iOS 9.2, and Safari 9.1 on iOS 9.3 through 9.3.6. It is plain HTML, CSS, and JavaScript with no build step, so `public` is the site, and any static file server can host it.
 
 ```sh
-python3 -m http.server 8000 --directory fleetfinch-lite/public   # from the repository root; reachable from an iOS 9 device on the same network
+npm run start:lite   # from the repository root: serves public on http://localhost:8000; stop it with Ctrl+C
+npm start            # the same, from inside fleetfinch-lite
 ```
+
+The `start` script runs Python's built-in file server, `python3 -m http.server`, so it needs Python 3 and nothing from npm. It listens on every network interface, so an iOS 9 device on the same network can open the site at your computer's address on port 8000. The page does not reload by itself after an edit; refresh it.
 
 ## Files
 
-| File                    | What it holds                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `public/index.html`     | The page, with the same title and description as the web app                                                                     |
-| `public/styles.css`     | The styles, in the system font, which is San Francisco on iOS 9                                                                  |
-| `public/script.js`      | Replaces the `no-js` class on `<html>` with `js`, so CSS can tell whether the script has run                                     |
-| `package.json`          | `browserslist`, set to `iOS >= 9`, which the checks below read; the `lint` and `typecheck` scripts; the checks' own dependencies |
-| `eslint.config.ts`      | ES5 syntax and the browser-API check for `public/**/*.js`, and the repository's type-aware rules for the config files            |
-| `prettier.config.ts`    | `trailingComma: "es5"`                                                                                                           |
-| `stylelint.config.ts`   | The CSS feature check                                                                                                            |
-| `lint-staged.config.ts` | What the pre-commit hook runs on files staged here                                                                               |
-| `tsconfig.json`         | Type-checks the config files                                                                                                     |
+| File                    | What it holds                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `public/index.html`     | The page, with the same title and description as the web app                                                                               |
+| `public/styles.css`     | The styles, in the system font, which is San Francisco on iOS 9                                                                            |
+| `public/script.js`      | Replaces the `no-js` class on `<html>` with `js`, so CSS can tell whether the script has run                                               |
+| `package.json`          | `browserslist`, set to `iOS >= 9`, which the checks below read; the `start`, `lint`, and `typecheck` scripts; the checks' own dependencies |
+| `eslint.config.ts`      | ES5 syntax and the browser-API check for `public/**/*.js`, and the repository's type-aware rules for the config files                      |
+| `prettier.config.ts`    | `trailingComma: "es5"`                                                                                                                     |
+| `stylelint.config.ts`   | The CSS feature check                                                                                                                      |
+| `lint-staged.config.ts` | What the pre-commit hook runs on files staged here                                                                                         |
+| `tsconfig.json`         | Type-checks the config files                                                                                                               |
 
 ## Checks
 

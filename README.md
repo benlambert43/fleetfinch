@@ -50,6 +50,7 @@ Run everything from the repository root.
 | `npm run dev`           | Starts the Next.js dev server                                                              |
 | `npm run dev:server`    | Starts the API with `node --watch`, restarting on changes to the server or shared sources  |
 | `npm run dev:desktop`   | Starts the desktop app in `fleetfinch-desktop` with a hot-reloading window                 |
+| `npm run start:lite`    | Serves the lite site from `fleetfinch-lite/public` on http://localhost:8000                |
 | `npm run build`         | Builds the web app                                                                         |
 | `npm run build:desktop` | Packages the desktop app for this machine into `fleetfinch-desktop/out`                    |
 | `npm run make:desktop`  | Packages the desktop app and zips it into `fleetfinch-desktop/out/make`, ready to hand out |

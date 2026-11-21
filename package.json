@@ -19,6 +19,7 @@
     "dev": "npm run dev --workspace fleetfinch-web",
     "dev:server": "npm run dev --workspace fleetfinch-server",
     "dev:desktop": "npm run dev --workspace fleetfinch-desktop",
+    "start:lite": "npm run start --workspace fleetfinch-lite",
     "build": "npm run build --workspace fleetfinch-web",
     "build:desktop": "npm run build --workspace fleetfinch-desktop",
     "make:desktop": "npm run make --workspace fleetfinch-desktop",
