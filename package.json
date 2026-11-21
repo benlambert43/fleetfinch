@@ -12,7 +12,8 @@
     "fleetfinch-ui",
     "fleetfinch-server",
     "fleetfinch-web",
-    "fleetfinch-desktop"
+    "fleetfinch-desktop",
+    "fleetfinch-lite"
   ],
   "scripts": {
     "dev": "npm run dev --workspace fleetfinch-web",
@@ -26,7 +27,7 @@
     "db:generate": "npm run db:generate --workspace fleetfinch-server",
     "db:migrate": "npm run db:migrate --workspace fleetfinch-server",
     "db:studio": "npm run db:studio --workspace fleetfinch-server",
-    "lint": "eslint --max-warnings 0",
+    "lint": "npm run lint --workspaces --if-present && eslint --max-warnings 0",
     "lint:fix": "eslint --fix",
     "lint:shell": "shellcheck scripts/*.sh .husky/pre-commit",
     "lint:editor": "node scripts/check-editor-settings.ts",

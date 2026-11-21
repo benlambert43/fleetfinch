@@ -1,0 +1,38 @@
+html {
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: #ffffff;
+  color: #171717;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  display: block;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.1111;
+  letter-spacing: -0.025em;
+}
+
+p {
+  max-width: 28rem;
+  margin: 0 auto;
+  color: #52525b;
+  font-size: 1.125rem;
+  line-height: 1.5556;
+}

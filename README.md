@@ -9,6 +9,7 @@ A software suite designed to bring modern functionality to iOS 9.3.5 and iOS 9.3
 | `fleetfinch-shared`  | Zod schemas, types, and the API client, imported as `@fleetfinch/shared` |
 | `fleetfinch-ui`      | React components and the Tailwind theme, imported as `@fleetfinch/ui`    |
 | `fleetfinch-desktop` | Electron desktop app, built from the same components as the web app      |
+| `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs     |
 
 ## Getting started
 
@@ -100,7 +101,7 @@ npx prettier --write README.md                     # formats one file
 npm run typecheck --workspace fleetfinch-server      # one workspace
 ```
 
-The pre-commit hook runs lint-staged on the staged files: every workspace is type-checked, ESLint and Prettier fix what they can, the tests that cover the staged files run, and staged shell scripts go through ShellCheck. CI runs the same checks as `npm run preflight`, split into parallel jobs.
+The pre-commit hook runs lint-staged on the staged files: every workspace is type-checked, ESLint and Prettier fix what they can, the tests that cover the staged files run, and staged shell scripts go through ShellCheck. CI runs the same checks as `npm run preflight`, split into parallel jobs. `npm run lint` first runs any workspace's own `lint` script, which in `fleetfinch-lite` is Stylelint, and files staged in that folder follow its own lint-staged config; see [its README](fleetfinch-lite/README.md).
 
 ### Tests
 
@@ -196,7 +197,7 @@ SITE_URL=https://example.com npm run build
 ## Tooling notes
 
 - **Two TypeScript versions, on purpose.** The workspaces type-check with TypeScript 7, the native compiler, which `next build` also uses. The root keeps TypeScript 6 because typescript-eslint's type-aware rules still need the JavaScript compiler API. VS Code uses that copy too (`js/ts.tsdk.path` in `.vscode/settings.json`), because the TypeScript 7 package ships no language server. Dependabot leaves TypeScript's major and minor versions alone for the same reason; bump them by hand.
-- **One config for the repository.** ESLint, Prettier, and lint-staged are configured at the root and cover every workspace, so run them from the root. Vitest's root config lists the workspace projects, each of which keeps its own `vitest.config.ts`. Every config file is TypeScript: Node.js 26 loads them directly, and ESLint reads `eslint.config.ts` through `jiti`.
+- **One config for the repository.** ESLint, Prettier, and lint-staged are configured at the root and cover every workspace but `fleetfinch-lite`, whose own configs hold its files to Safari 9. Run them from the root either way, since each tool uses the config closest to a file. Vitest's root config lists the workspace projects, each of which keeps its own `vitest.config.ts`. Every config file is TypeScript: Node.js 26 loads them directly, and ESLint reads `eslint.config.ts` through `jiti`.
 - **The editor agrees with preflight.** A passing `npm run preflight` should leave nothing underlined in VS Code. ESLint fails on deprecated APIs and lints Tailwind classes with `eslint-plugin-better-tailwindcss`, which makes the same checks as the Tailwind CSS IntelliSense extension, so `.vscode/settings.json` turns those three IntelliSense lints off. Prettier wraps long class lists, so the plugin's line-wrapping rule is the one rule switched off.
 - **ShellCheck reads `.shellcheckrc`**, so a script checked on its own in the editor follows `scripts/lib.sh` just as `lint:shell` does.
 - **`overrides` in `package.json`.** One entry points every `eslint` peer dependency at the root ESLint 10, because some plugins bundled with `eslint-config-next` still declare ESLint 9. The other lets `@esbuild-kit/core-utils`, a deprecated package that `drizzle-kit` lists but never loads, share the esbuild already installed instead of adding an old release with a known advisory.

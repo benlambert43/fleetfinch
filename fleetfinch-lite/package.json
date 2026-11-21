@@ -1,0 +1,21 @@
+{
+  "name": "fleetfinch-lite",
+  "version": "0.1.0",
+  "description": "Plain HTML, CSS, and JavaScript site for Safari 9 on iOS 9.",
+  "private": true,
+  "type": "module",
+  "browserslist": [
+    "iOS >= 9"
+  ],
+  "scripts": {
+    "lint": "stylelint \"public/**/*.css\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "eslint-plugin-compat": "^7.0.2",
+    "stylelint": "^18.0.0",
+    "stylelint-no-unsupported-browser-features": "^8.1.2",
+    "typescript": "^7.0.2"
+  }
+}
