@@ -50,10 +50,17 @@ p {
   font-size: 1rem;
   line-height: 1.5;
   text-decoration: none;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
-.carbon-link:hover {
+.carbon-link:active {
   background: #fa880d;
+}
+
+@media (hover: hover) {
+  .carbon-link:hover {
+    background: #fa880d;
+  }
 }
 
 .devices {
@@ -72,7 +79,17 @@ p {
   font-size: 1.125rem;
   font-weight: 600;
   line-height: 1.5556;
+  border-radius: 0.6875rem;
   cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+.devices[open] summary {
+  border-radius: 0.6875rem 0.6875rem 0 0;
+}
+
+.devices summary:active {
+  background: #e6d2c1;
 }
 
 .devices summary::-webkit-details-marker {
@@ -144,6 +161,7 @@ p {
   border-radius: 0.5rem;
   background: #c6edf6;
   color: #434c6b;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 .device-icon {
@@ -152,8 +170,14 @@ p {
   height: 1.25rem;
 }
 
-.device-link:hover {
+.device-link:active {
   background: #47cfea;
+}
+
+@media (hover: hover) {
+  .device-link:hover {
+    background: #47cfea;
+  }
 }
 
 .finch {
