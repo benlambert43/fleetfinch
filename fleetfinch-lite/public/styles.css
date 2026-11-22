@@ -39,9 +39,59 @@ p {
   line-height: 1.5556;
 }
 
+h2 {
+  margin: 2.5rem 0 1.25rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3333;
+}
+
+.prereqs {
+  box-sizing: border-box;
+  max-width: calc(28rem + 2px);
+  margin: 0 auto;
+  text-align: left;
+}
+
+.prereqs h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.5556;
+}
+
+.install {
+  margin-top: 0.5rem;
+}
+
+.install-body {
+  margin: 0 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid #d4bba6;
+}
+
+.steps,
+.steps-note {
+  margin: 1.25rem 0 0;
+  color: #765e49;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.steps-note {
+  max-width: none;
+}
+
+.steps {
+  padding-left: 1.5rem;
+}
+
+.steps li + li {
+  margin-top: 0.5rem;
+}
+
 .carbon-link {
   display: inline-block;
-  margin-top: 1.5rem;
   padding: 0.6875rem 1rem;
   border: 1px solid #fa880d;
   border-radius: 0.5rem;
@@ -71,16 +121,14 @@ p {
   }
 }
 
-.devices {
+.accordion {
   display: block;
-  max-width: 28rem;
-  margin: 2.5rem auto 0;
   border: 1px solid #d4bba6;
   border-radius: 0.75rem;
   text-align: left;
 }
 
-.devices summary {
+.accordion summary {
   display: block;
   position: relative;
   padding: 1rem 2.75rem 1rem 1rem;
@@ -92,19 +140,19 @@ p {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
-.devices[open] summary {
+.accordion[open] summary {
   border-radius: 0.6875rem 0.6875rem 0 0;
 }
 
-.devices summary:active {
+.accordion summary:active {
   background: #e6d2c1;
 }
 
-.devices summary::-webkit-details-marker {
+.accordion summary::-webkit-details-marker {
   display: none;
 }
 
-.devices summary::after {
+.accordion summary::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -117,8 +165,13 @@ p {
   transition: transform 0.2s ease;
 }
 
-.devices[open] summary::after {
+.accordion[open] summary::after {
   transform: translateY(-25%) rotate(225deg);
+}
+
+.devices {
+  max-width: 28rem;
+  margin: 1rem auto 0;
 }
 
 .devices ul {
@@ -190,17 +243,15 @@ p {
 
 .finch {
   display: block;
-  flex-shrink: 0;
-  align-self: flex-start;
   width: 10rem;
   height: auto;
-  margin: 0 0 1rem 1rem;
+  margin: 0 auto 1rem;
 }
 
 @media (min-width: 48em) {
   .finch {
     width: 15rem;
-    margin: 0 0 1.5rem 1.5rem;
+    margin-bottom: 1.5rem;
   }
 }
 
