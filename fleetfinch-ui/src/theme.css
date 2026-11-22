@@ -1,13 +1,52 @@
 @source "./";
 
+@theme {
+  --color-*: initial;
+  --color-sand-light: #f0e2d6;
+  --color-sand-mid: #d4bba6;
+  --color-sand-deep: #765e49;
+  --color-sand-dark: #5a422c;
+  --color-blue-light: #c6edf6;
+  --color-blue-mid: #47cfea;
+  --color-blue-deep: #4e97a7;
+  --color-blue-dark: #434c6b;
+  --color-orange-light: #ffdbbd;
+  --color-orange-mid: #fa880d;
+  --color-orange-dark: #5b2700;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-sand-light);
+  --foreground: var(--color-sand-dark);
+  --muted: var(--color-sand-deep);
+  --border: var(--color-sand-mid);
+  --primary: var(--color-blue-mid);
+  --primary-foreground: var(--color-blue-dark);
+  --primary-soft: var(--color-blue-light);
+  --primary-soft-foreground: var(--color-blue-dark);
+  --primary-border: var(--color-blue-deep);
+  --accent: var(--color-orange-mid);
+  --accent-foreground: var(--color-orange-dark);
+  --accent-soft: var(--color-orange-light);
+  --accent-soft-foreground: var(--color-orange-dark);
+  --accent-border: var(--color-orange-mid);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-primary-border: var(--primary-border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-accent-border: var(--accent-border);
   --font-sans: "Helvetica Neue", var(--font-inter), sans-serif;
   --font-serif: "Iowan Old Style", var(--font-spectral), serif;
   --font-mono: "Menlo", var(--font-noto-sans-mono), monospace;
@@ -33,8 +72,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: var(--color-sand-dark);
+    --foreground: var(--color-sand-light);
+    --muted: var(--color-sand-mid);
+    --primary-soft: var(--color-blue-dark);
+    --primary-soft-foreground: var(--color-blue-light);
+    --primary-border: var(--color-blue-mid);
+    --accent-soft: var(--color-orange-dark);
+    --accent-soft-foreground: var(--color-orange-light);
   }
 }
 

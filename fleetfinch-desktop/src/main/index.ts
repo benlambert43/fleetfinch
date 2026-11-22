@@ -12,6 +12,8 @@ import {
   shell,
 } from "electron";
 
+import { darkColors, lightColors } from "@fleetfinch/ui/colors";
+
 import { contentSecurityPolicy } from "@/contentSecurityPolicy.ts";
 import { env } from "@/env.ts";
 import { handlers } from "@/main/handlers.ts";
@@ -109,7 +111,9 @@ function createWindow(): void {
   const window = new BrowserWindow({
     width: 960,
     height: 720,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff",
+    backgroundColor: nativeTheme.shouldUseDarkColors
+      ? darkColors.background
+      : lightColors.background,
     webPreferences: {
       preload,
       v8CacheOptions: "bypassHeatCheck",

@@ -16,9 +16,7 @@ export function AppShell({
     >
       <header className="flex flex-col items-center gap-4">
         <h1 className="text-4xl font-semibold tracking-tight">{title}</h1>
-        <p className="max-w-md text-lg text-zinc-600 dark:text-zinc-400">
-          {description}
-        </p>
+        <p className="max-w-md text-lg text-muted">{description}</p>
       </header>
       {children}
     </main>
@@ -27,7 +25,7 @@ export function AppShell({
 
 export function SectionHeading({ children }: { children: ReactNode }) {
   return (
-    <h2 className="text-sm font-semibold tracking-wide text-zinc-500 uppercase">
+    <h2 className="text-sm font-semibold tracking-wide text-muted uppercase">
       {children}
     </h2>
   );

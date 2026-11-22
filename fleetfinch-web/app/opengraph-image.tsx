@@ -1,3 +1,4 @@
+import { darkColors } from "@fleetfinch/ui/colors";
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -25,13 +26,15 @@ export default function Image() {
         gap: 32,
         padding: 96,
         fontFamily: "Inter",
-        background: "#0a0a0a",
-        color: "#ededed",
+        background: darkColors.background,
+        color: darkColors.foreground,
         textAlign: "center",
       }}
     >
       <div style={{ fontSize: 112 }}>{site.name}</div>
-      <div style={{ fontSize: 44, color: "#a1a1aa" }}>{site.description}</div>
+      <div style={{ fontSize: 44, color: darkColors.muted }}>
+        {site.description}
+      </div>
     </div>,
     {
       ...size,
