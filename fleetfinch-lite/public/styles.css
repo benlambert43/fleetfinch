@@ -53,6 +53,14 @@ p {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
+.carbon-icon {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.25rem;
+  vertical-align: -0.125rem;
+}
+
 .carbon-link:active {
   background: #fa880d;
 }
