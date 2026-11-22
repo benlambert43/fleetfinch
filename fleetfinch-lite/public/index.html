@@ -65,27 +65,27 @@
                 <ol class="steps">
                   <li>
                     Use Carbon to install the Carbon jailbreak on your device.
+                    <ul>
+                      <li>
+                        Open the Carbon website by clicking the button above.
+                      </li>
+                      <li>
+                        Click "Install Certs" at the top of the page, and follow
+                        the instructions in the settings app to approve the
+                        certifications.
+                      </li>
+                      <li>
+                        Return to the website, and then press the blue "Run"
+                        button.
+                      </li>
+                      <li>
+                        You may have to press the Run button many times before
+                        the jailbreak works. This is normal. Once the button
+                        says "Exploiting" for an extended period of time, do not
+                        interact with the device until it has rebooted.
+                      </li>
+                    </ul>
                   </li>
-                  <ul>
-                    <li>
-                      Open the Carbon website by clicking the button above.
-                    </li>
-                    <li>
-                      Click "Install Certs" at the top of the page, and follow
-                      the instructions in the settings app to approve the
-                      certifications.
-                    </li>
-                    <li>
-                      Return to the website, and then press the blue "Run"
-                      button.
-                    </li>
-                    <li>
-                      You may have to press the Run button many times before the
-                      jailbreak works. This is normal. Once the button says
-                      "Exploiting" for an extended period of time, do not
-                      interact with the device until it has rebooted.
-                    </li>
-                  </ul>
                   <li>
                     After Carbon has successfully been installed, open the Cydia
                     app that you now have on the home screen.
@@ -117,6 +117,62 @@
                 </p>
               </div>
             </details>
+          </div>
+          <div class="fleetfinch-install">
+            <h3>Installation</h3>
+            <fieldset class="checklist">
+              <legend class="checklist-legend">
+                Check off each prerequisite once it is complete.
+              </legend>
+              <div class="checklist-items">
+                <label class="checklist-item">
+                  <input
+                    class="checklist-input"
+                    type="checkbox"
+                    value="carbon"
+                  />
+                  <span class="checklist-box" aria-hidden="true"></span>
+                  <span class="checklist-text">
+                    I have run the Carbon exploit and I can now see Cydia on my
+                    home screen
+                  </span>
+                </label>
+                <label class="checklist-item">
+                  <input
+                    class="checklist-input"
+                    type="checkbox"
+                    value="iocaste"
+                  />
+                  <span class="checklist-box" aria-hidden="true"></span>
+                  <span class="checklist-text">
+                    I have installed iocaste untether by staturnz
+                  </span>
+                </label>
+                <label class="checklist-item">
+                  <input
+                    class="checklist-input"
+                    type="checkbox"
+                    value="openssh"
+                  />
+                  <span class="checklist-box" aria-hidden="true"></span>
+                  <span class="checklist-text">
+                    I have installed the OpenSSH package by Jay Freeman (saurik)
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+            <button
+              type="button"
+              class="carbon-link install-button"
+              aria-disabled="true"
+              aria-describedby="install-error"
+            >
+              Install FleetFinch
+            </button>
+            <p id="install-error" class="install-error" role="alert" hidden>
+              Check off all three prerequisites above as complete before
+              installing FleetFinch.
+            </p>
           </div>
         </div>
       </header>
