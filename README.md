@@ -2,14 +2,14 @@
 
 A software suite designed to bring modern functionality to iOS 9.3.5 and iOS 9.3.6 devices
 
-| Workspace            | What it is                                                                   |
-| -------------------- | ---------------------------------------------------------------------------- |
-| `fleetfinch-web`     | Next.js web app: the lite site's page, with modern browser features          |
-| `fleetfinch-server`  | Express API on Node.js, with Drizzle ORM and PostgreSQL                      |
-| `fleetfinch-shared`  | Zod schemas, types, and the API client, imported as `@fleetfinch/shared`     |
-| `fleetfinch-ui`      | React components and the Tailwind theme, imported as `@fleetfinch/ui`        |
-| `fleetfinch-desktop` | Electron desktop app with pages of its own, built from the shared components |
-| `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs         |
+| Workspace            | What it is                                                                       |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `fleetfinch-web`     | Next.js web app: the lite site's page, with modern browser features              |
+| `fleetfinch-server`  | Express API on Node.js, with Drizzle ORM and PostgreSQL                          |
+| `fleetfinch-shared`  | Zod schemas, types, and the API client, imported as `@fleetfinch/shared`         |
+| `fleetfinch-ui`      | React components and the Tailwind theme, imported as `@fleetfinch/ui`            |
+| `fleetfinch-desktop` | FleetFinch Developer, the Electron desktop app, built from the shared components |
+| `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs             |
 
 ## Getting started
 
@@ -263,7 +263,7 @@ SITE_URL=https://example.com npm run build
 
 ## Desktop app
 
-`fleetfinch-desktop` is an Electron app with pages of its own, Home and Settings, built from the shared components. Its window is a React app compiled by Vite that calls the API directly: the server that sits between the web app and the API is there for caching and search engines, which a desktop app has no use for. The main process owns the window and its security rules, and answers the window over a small typed bridge.
+`fleetfinch-desktop` is FleetFinch Developer, an Electron app with pages of its own, Home and Settings, built from the shared components. Its window is a React app compiled by Vite that calls the API directly: the server that sits between the web app and the API is there for caching and search engines, which a desktop app has no use for. The main process owns the window and its security rules, and answers the window over a small typed bridge.
 
 ```text
 window (React, sandboxed) → API

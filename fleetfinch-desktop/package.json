@@ -1,6 +1,6 @@
 {
   "name": "fleetfinch-desktop",
-  "productName": "FleetFinch",
+  "productName": "FleetFinch Developer",
   "version": "0.1.0",
   "description": "Electron desktop app.",
   "private": true,

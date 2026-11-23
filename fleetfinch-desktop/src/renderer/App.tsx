@@ -9,7 +9,7 @@ import { Activity, Suspense, useSyncExternalStore } from "react";
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
 import { TitleBar } from "@/renderer/TitleBar.tsx";
 
-const appName = "FleetFinch";
+const appName = "FleetFinch Developer";
 
 const homeHref = "#/";
 const settingsHref = "#/settings";
