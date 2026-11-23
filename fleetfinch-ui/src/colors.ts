@@ -10,6 +10,8 @@ export const palette = {
   orangeLight: "#ffdbbd",
   orangeMid: "#fa880d",
   orangeDark: "#5b2700",
+  redLight: "#ffb3a6",
+  redDeep: "#a3291a",
 } as const;
 
 export const lightColors = {
@@ -27,6 +29,7 @@ export const lightColors = {
   accentSoft: palette.orangeLight,
   accentSoftForeground: palette.orangeDark,
   accentBorder: palette.orangeMid,
+  danger: palette.redDeep,
 } as const;
 
 export const darkColors = {
@@ -39,4 +42,5 @@ export const darkColors = {
   primaryBorder: palette.blueMid,
   accentSoft: palette.orangeDark,
   accentSoftForeground: palette.orangeLight,
+  danger: palette.redLight,
 } as const;

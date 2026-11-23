@@ -32,37 +32,51 @@ const options: { value: ThemePreference; label: string; icon: ReactNode }[] = [
   },
 ];
 
+const styles = {
+  icons: {
+    group: "flex overflow-hidden rounded-lg border border-border",
+    option:
+      "flex size-11 items-center justify-center not-first:border-l not-first:border-border",
+    icon: "size-5",
+  },
+  labels: {
+    group: "flex overflow-hidden rounded-lg border-2 border-foreground",
+    option:
+      "flex h-9 items-center gap-1.5 px-3 text-sm font-medium not-first:border-l-2 not-first:border-foreground",
+    icon: "size-4.5",
+  },
+};
+
 export function ThemeToggle({
   value,
   onChange,
+  showLabels = false,
 }: {
   value: ThemePreference | null;
   onChange: (value: ThemePreference) => void;
+  showLabels?: boolean;
 }) {
   const name = useId();
+  const style = showLabels ? styles.labels : styles.icons;
   return (
-    <div
-      role="radiogroup"
-      aria-label="Theme"
-      className="flex overflow-hidden rounded-lg border border-border"
-    >
+    <div role="radiogroup" aria-label="Theme" className={style.group}>
       {options.map((option) => (
         <label
           key={option.value}
-          title={option.label}
-          className="flex size-10 cursor-pointer items-center justify-center
-            text-muted not-first:border-l not-first:border-border
-            not-has-checked:hover:text-foreground has-checked:bg-foreground
-            has-checked:text-background has-focus-visible:outline-2
-            has-focus-visible:-outline-offset-4
-            has-focus-visible:outline-foreground
-            has-checked:has-focus-visible:outline-background"
+          title={showLabels ? undefined : option.label}
+          className={`cursor-pointer text-muted
+          not-has-checked:hover:bg-foreground/5
+          not-has-checked:hover:text-foreground has-checked:bg-foreground
+          has-checked:text-background has-focus-visible:outline-2
+          has-focus-visible:-outline-offset-4
+          has-focus-visible:outline-foreground
+          has-checked:has-focus-visible:outline-background ${style.option}`}
         >
           <input
             type="radio"
             name={name}
             value={option.value}
-            aria-label={option.label}
+            aria-label={showLabels ? undefined : option.label}
             checked={value === option.value}
             onChange={() => {
               onChange(option.value);
@@ -77,10 +91,11 @@ export function ThemeToggle({
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="size-5"
+            className={style.icon}
           >
             {option.icon}
           </svg>
+          {showLabels && option.label}
         </label>
       ))}
     </div>

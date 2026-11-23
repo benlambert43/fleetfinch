@@ -6,17 +6,16 @@ export function AppShell({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   children?: ReactNode;
 }) {
   return (
-    <main
-      className="flex flex-1 flex-col items-center gap-10 px-6 py-16
-        text-center"
-    >
-      <header className="flex flex-col items-center gap-4">
-        <h1 className="text-4xl font-semibold tracking-tight">{title}</h1>
-        <p className="max-w-md text-lg text-muted">{description}</p>
+    <main className="flex flex-1 flex-col gap-6 p-5 sm:p-8">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {description !== undefined && (
+          <p className="max-w-md text-muted">{description}</p>
+        )}
       </header>
       {children}
     </main>

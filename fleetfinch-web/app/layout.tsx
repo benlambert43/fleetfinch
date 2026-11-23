@@ -18,14 +18,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${fontVariables} h-full antialiased`}
+      className={`${fontVariables} h-full scrollbar-gutter-both antialiased`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="flex min-h-full flex-col font-sans">
-        <header className="absolute top-3 right-3">
+      <body className="relative flex min-h-full min-w-75 flex-col font-sans">
+        <header className="absolute top-2 right-2 noscript:hidden">
           <StoredThemeToggle />
         </header>
         {children}

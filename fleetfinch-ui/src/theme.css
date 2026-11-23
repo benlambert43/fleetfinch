@@ -25,6 +25,8 @@
   --color-orange-light: #ffdbbd;
   --color-orange-mid: #fa880d;
   --color-orange-dark: #5b2700;
+  --color-red-light: #ffb3a6;
+  --color-red-deep: #a3291a;
 }
 
 :root {
@@ -44,6 +46,7 @@
   --accent-soft: var(--color-orange-light);
   --accent-soft-foreground: var(--color-orange-dark);
   --accent-border: var(--color-orange-mid);
+  --danger: var(--color-red-deep);
 
   @variant dark {
     color-scheme: dark;
@@ -56,6 +59,7 @@
     --primary-border: var(--color-blue-mid);
     --accent-soft: var(--color-orange-dark);
     --accent-soft-foreground: var(--color-orange-light);
+    --danger: var(--color-red-light);
   }
 }
 
@@ -75,6 +79,7 @@
   --color-accent-soft: var(--accent-soft);
   --color-accent-soft-foreground: var(--accent-soft-foreground);
   --color-accent-border: var(--accent-border);
+  --color-danger: var(--danger);
   --font-sans: "Helvetica Neue", var(--font-inter), sans-serif;
   --font-serif: "Iowan Old Style", var(--font-spectral), serif;
   --font-mono: "Menlo", var(--font-noto-sans-mono), monospace;

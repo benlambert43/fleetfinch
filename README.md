@@ -2,14 +2,14 @@
 
 A software suite designed to bring modern functionality to iOS 9.3.5 and iOS 9.3.6 devices
 
-| Workspace            | What it is                                                               |
-| -------------------- | ------------------------------------------------------------------------ |
-| `fleetfinch-web`     | Next.js web app                                                          |
-| `fleetfinch-server`  | Express API on Node.js, with Drizzle ORM and PostgreSQL                  |
-| `fleetfinch-shared`  | Zod schemas, types, and the API client, imported as `@fleetfinch/shared` |
-| `fleetfinch-ui`      | React components and the Tailwind theme, imported as `@fleetfinch/ui`    |
-| `fleetfinch-desktop` | Electron desktop app, built from the same components as the web app      |
-| `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs     |
+| Workspace            | What it is                                                                   |
+| -------------------- | ---------------------------------------------------------------------------- |
+| `fleetfinch-web`     | Next.js web app: the lite site's page, with modern browser features          |
+| `fleetfinch-server`  | Express API on Node.js, with Drizzle ORM and PostgreSQL                      |
+| `fleetfinch-shared`  | Zod schemas, types, and the API client, imported as `@fleetfinch/shared`     |
+| `fleetfinch-ui`      | React components and the Tailwind theme, imported as `@fleetfinch/ui`        |
+| `fleetfinch-desktop` | Electron desktop app with pages of its own, built from the shared components |
+| `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs         |
 
 ## Getting started
 
@@ -169,8 +169,9 @@ A feature runs through these layers, from the database to the components.
 - **The web app supplies data from the server.** Server components load data through the API client in `app/_lib/api.ts` and hand it to the shared components.
 - **The desktop app supplies data from the window.** Components in `fleetfinch-desktop/src/renderer` load data through the API client in `src/renderer/api.ts`, which calls the API directly.
 - **`"use client"` where needed.** Components with state or event handlers start with it, which lets the App Router render them from server components. The others have no directive, so they can render on the server as well.
-- **One theme.** `src/theme.css` is the one place for colors and fonts, and it tells Tailwind to scan the package for class names. It replaces Tailwind's default colors with three ramps built on the six palette colors: `sand-light`, `sand-mid`, `sand-deep`, and `sand-dark`; `blue-light`, `blue-mid`, `blue-deep`, and `blue-dark`; and `orange-light`, `orange-mid`, and `orange-dark`. Components use the roles mapped onto them, which switch for dark mode: `background`, `foreground`, `muted`, and `border` for the page, `chrome` for the desktop title bar and its menus, a shade darker than the page that still keeps `muted` text at 4.5:1, `primary` for blue buttons, and `accent` for orange ones. Dark mode applies when `<html>` has `data-theme="dark"`, or when the system is dark and `<html>` does not have `data-theme="light"`; the file redefines Tailwind's `dark:` variant the same way, and sets `color-scheme` to match. A solid button is `bg-primary text-primary-foreground`, and a soft one is `bg-primary-soft text-primary-soft-foreground border-primary-border` that turns solid on hover; the `accent` roles work the same way. Every text pairing reaches at least 4.5:1 in both modes. `src/colors.ts`, imported from `@fleetfinch/ui/colors`, holds the same values for code that cannot read CSS, such as the preview image and the desktop window's background, and `fleetfinch-lite` writes the light- and dark-mode values out as hex because Safari 9 lacks custom properties.
-- **Theme toggle.** `ThemeToggle` sits at the top right of each app and offers Auto, Light, and Dark, while the app decides where the choice is kept. The selected option is filled with the text color, which stands 7.36:1 from the page in both modes, since the soft blue fills are too close to the page to mark a state. The web app saves it in `localStorage` and sets `data-theme` on `<html>`, and an inline script in `app/layout.tsx` applies the saved choice before the first paint, as the Next.js guide to preventing a flash before hydration describes, so pages stay prerendered. The desktop app sends it over the bridge to the main process, which sets Electron's `nativeTheme.themeSource`; the window's `prefers-color-scheme` follows that, so it needs no `data-theme`.
+- **One theme.** `src/theme.css` is the one place for colors and fonts, and it tells Tailwind to scan the package for class names. It replaces Tailwind's default colors with three ramps built on the six palette colors: `sand-light`, `sand-mid`, `sand-deep`, and `sand-dark`; `blue-light`, `blue-mid`, `blue-deep`, and `blue-dark`; and `orange-light`, `orange-mid`, and `orange-dark`. Components use the roles mapped onto them, which switch for dark mode: `background`, `foreground`, `muted`, and `border` for the page, `chrome` for the sidebar and the desktop title bar and its menus, a shade darker than the page that still keeps `muted` text at 4.5:1, `primary` for blue buttons, `accent` for orange ones, and `danger` for error messages. Dark mode applies when `<html>` has `data-theme="dark"`, or when the system is dark and `<html>` does not have `data-theme="light"`; the file redefines Tailwind's `dark:` variant the same way, and sets `color-scheme` to match. A solid button is `bg-primary text-primary-foreground`, and a soft one is `bg-primary-soft text-primary-soft-foreground border-primary-border` that turns solid on hover; the `accent` roles work the same way. Every text pairing reaches at least 4.5:1 in both modes. `src/colors.ts`, imported from `@fleetfinch/ui/colors`, holds the same values for code that cannot read CSS, such as the preview image and the desktop window's background, and `fleetfinch-lite` writes the light- and dark-mode values out as hex because Safari 9 lacks custom properties.
+- **Sidebar.** `Sidebar` runs down the left of the desktop app, and across the top on narrow windows, with a link to each page: Home, which shows the name and the description, and Settings, which holds the theme toggle. It renders whatever link component the app gives it and marks the current page with `aria-current="page"`. The desktop app passes a plain `<a>` and keeps the page in the address's hash, so a reload stays on it.
+- **Theme toggle.** `ThemeToggle` offers Auto, Light, and Dark, while the app decides where the choice is kept. The web app shows it at the top right as three 44-pixel icons, as `fleetfinch-lite` does, and the desktop app shows it on its Settings page with `showLabels`, which puts each option's name beside its icon. The selected option is filled with the text color, which stands 7.36:1 from the page in both modes, since the soft blue fills are too close to the page to mark a state. The web app saves it in `localStorage` and sets `data-theme` on `<html>`, and an inline script in `app/layout.tsx` applies the saved choice before the first paint, as the Next.js guide to preventing a flash before hydration describes, so pages stay prerendered. The desktop app sends it over the bridge to the main process, which sets Electron's `nativeTheme.themeSource`; the window's `prefers-color-scheme` follows that, so it needs no `data-theme`.
 - **No build step.** The apps compile the package from source, as they do `@fleetfinch/shared`, so an edit hot-reloads in every app that is running.
 - **Linted like the web app.** The web app gets its React and accessibility rules from `eslint-config-next`. React code outside it is held to the React, hooks, and accessibility rule sets of the same plugins, and may not use Node.js globals.
 - **Tests beside the components.** They run in jsdom with Testing Library; `npm run test:ui` runs them alone.
@@ -205,6 +206,21 @@ A component belongs in `fleetfinch-ui` when more than one app shows it, or could
 | `font-thonburi`            | Thonburi (Light)                                     | Noto Sans Thai Looped     | `--font-noto-sans-thai-looped` |
 
 Two substitutes fall short of their Apple font. Besley starts at Regular, so Superclarendon Light falls back to it. Noto Sans Mono has no italic, so the browser slants the upright, as Menlo's italic does.
+
+## Web app
+
+The web app's home page has the same content as `fleetfinch-lite`, the version of it for Safari 9, so change the two together. It keeps the lite site's look and behavior but uses what a current browser offers:
+
+| What                    | `fleetfinch-lite`                                 | `fleetfinch-web`                                                                                                    |
+| ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Colors and dark mode    | Hex values, with a `theme-dark` class on `<html>` | The theme's roles and `dark:` variant, following `prefers-color-scheme` under Auto                                  |
+| Finch sketch            | Two PNG files in a `srcset`                       | `next/image` from `assets/finch.png`, served as AVIF or WebP at the width the screen needs                          |
+| Accordions              | `<details>`, with a chevron drawn from borders    | `<details>` in `app/_components/Accordion.tsx`, which grows and shrinks through `::details-content` where supported |
+| Prerequisite checklist  | `public/script.js` reads and writes the boxes     | `app/_components/InstallChecklist.tsx`, a React store in `localStorage` that follows changes made in other tabs     |
+| Theme toggle before JS  | Hidden while `<html>` has the `no-js` class       | Hidden by the `noscript:` variant, which is `@media (scripting: none)`                                              |
+| Spacing and focus rings | Margins, and outlines on `:focus`                 | Flexbox `gap`, and outlines on `:focus-visible`                                                                     |
+
+Both save the checklist under `fleetfinch-prerequisites` and the theme under `fleetfinch-theme`, in the same formats.
 
 ## Search engines and link previews
 
@@ -247,7 +263,7 @@ SITE_URL=https://example.com npm run build
 
 ## Desktop app
 
-`fleetfinch-desktop` is an Electron app that shows the same page as the web app, built from the same components. Its window is a React app compiled by Vite that calls the API directly: the server that sits between the web app and the API is there for caching and search engines, which a desktop app has no use for. The main process owns the window and its security rules, and answers the window over a small typed bridge.
+`fleetfinch-desktop` is an Electron app with pages of its own, Home and Settings, built from the shared components. Its window is a React app compiled by Vite that calls the API directly: the server that sits between the web app and the API is there for caching and search engines, which a desktop app has no use for. The main process owns the window and its security rules, and answers the window over a small typed bridge.
 
 ```text
 window (React, sandboxed) → API
@@ -285,6 +301,7 @@ Paths are inside `fleetfinch-desktop`.
 | `src/main/handlers.ts`      | Implements each method, given the window that called it                                                                                                                                                                                         |
 | `src/menu.ts`               | The File, Edit, View, and Window commands, with their labels and keyboard shortcuts, shared by the main process and the window                                                                                                                  |
 | `src/main/menu.ts`          | Builds the application menu from those commands, and runs one when the window asks, refusing any it does not know                                                                                                                               |
+| `src/renderer/App.tsx`      | The sidebar and the two pages, Home and Settings. Each page stays mounted inside React's `<Activity>`, hidden while another is shown, as Next.js keeps routes in the web app, so the theme toggle keeps its state                               |
 | `src/renderer/TitleBar.tsx` | The title bar that replaces the system's: the menu button from `AppMenu.tsx` and the window buttons from `WindowControls.tsx`                                                                                                                   |
 | `src/main/theme.ts`         | Saves the theme to `theme.json` in the app's data folder, restores it before the window opens, and refuses unknown values                                                                                                                       |
 | `src/main/index.ts`         | The window, and the security rules listed below                                                                                                                                                                                                 |

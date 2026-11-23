@@ -11,5 +11,5 @@ export function NativeThemeToggle() {
     void window.bridge.setTheme(next);
   }
 
-  return <ThemeToggle value={theme} onChange={choose} />;
+  return <ThemeToggle value={theme} onChange={choose} showLabels />;
 }
