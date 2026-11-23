@@ -118,7 +118,7 @@ function windowBackground(): string {
 
 function createWindow(): void {
   const window = new BrowserWindow({
-    width: 960,
+    width: 1282,
     height: 720,
     minWidth: 768,
     minHeight: 600,
