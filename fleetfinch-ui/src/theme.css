@@ -47,6 +47,10 @@
   --accent-soft-foreground: var(--color-orange-dark);
   --accent-border: var(--color-orange-mid);
   --danger: var(--color-red-deep);
+  --menu: var(--chrome);
+  --menu-foreground: var(--foreground);
+  --menu-muted: var(--muted);
+  --menu-border: var(--border);
 
   @variant dark {
     color-scheme: dark;
@@ -60,6 +64,15 @@
     --accent-soft: var(--color-orange-dark);
     --accent-soft-foreground: var(--color-orange-light);
     --danger: var(--color-red-light);
+    --menu-saturation: 0.35;
+    --menu: oklch(from var(--chrome) l calc(c * var(--menu-saturation)) h);
+    --menu-foreground: oklch(
+      from var(--foreground) l calc(c * var(--menu-saturation)) h
+    );
+    --menu-muted: oklch(from var(--muted) l calc(c * var(--menu-saturation)) h);
+    --menu-border: oklch(
+      from var(--border) l calc(c * var(--menu-saturation)) h
+    );
   }
 }
 
@@ -80,6 +93,10 @@
   --color-accent-soft-foreground: var(--accent-soft-foreground);
   --color-accent-border: var(--accent-border);
   --color-danger: var(--danger);
+  --color-menu: var(--menu);
+  --color-menu-foreground: var(--menu-foreground);
+  --color-menu-muted: var(--menu-muted);
+  --color-menu-border: var(--menu-border);
   --font-sans: "Helvetica Neue", var(--font-inter), sans-serif;
   --font-serif: "Iowan Old Style", var(--font-spectral), serif;
   --font-mono: "Menlo", var(--font-noto-sans-mono), monospace;

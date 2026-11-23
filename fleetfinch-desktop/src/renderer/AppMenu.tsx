@@ -1,10 +1,27 @@
 import { Bars3Icon, ChevronRightIcon } from "@heroicons/react/24/outline";
-import { type KeyboardEvent, type ToggleEvent, useId, useRef } from "react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type ToggleEvent,
+  useId,
+  useRef,
+} from "react";
 
 import { type MenuAction, type MenuSection, menuSections } from "@/menu.ts";
 
 const isMac = window.bridge.platform === "darwin";
 const sections = menuSections(window.bridge.platform);
+const trailLength = 4;
+const aimWindow = 60;
+const aimDelay = 50;
+const minAimSpeed = 0.1;
+
+interface Point {
+  x: number;
+  y: number;
+  t: number;
+}
 
 const macKeys: Record<string, string> = {
   CmdOrCtrl: "⌘",
@@ -54,27 +71,46 @@ function moveFocus(event: KeyboardEvent<HTMLElement>): void {
   }
 }
 
-function focusOnOpen(
-  event: ToggleEvent<HTMLElement>,
-  invoker: HTMLElement | null,
-): void {
-  const menu = event.currentTarget;
-  if (event.target !== menu || event.newState !== "open") {
-    return;
+function isPointerClick(event: MouseEvent): boolean {
+  return event.detail > 0;
+}
+
+function focusOnHover(event: PointerEvent<HTMLElement>): void {
+  if (document.activeElement !== event.currentTarget) {
+    event.currentTarget.focus();
   }
-  if (invoker && document.activeElement === invoker) {
-    itemsOf(menu)[0]?.focus();
-  } else {
-    menu.focus();
+}
+
+function unfocusOnLeave(event: PointerEvent<HTMLElement>): void {
+  if (document.activeElement === event.currentTarget) {
+    event.currentTarget.closest<HTMLElement>('[role="menu"]')?.focus();
   }
+}
+
+function pointOf(event: PointerEvent): Point {
+  return { x: event.clientX, y: event.clientY, t: event.timeStamp };
+}
+
+function isAimingAt(from: Point, to: Point, target: DOMRect): boolean {
+  const edge = target.left >= to.x ? target.left : target.right;
+  const dx = to.x - from.x;
+  const towardTarget = Math.sign(dx) === Math.sign(edge - to.x);
+  const fastEnough = Math.abs(dx) >= minAimSpeed * (to.t - from.t);
+  if (dx === 0 || !towardTarget || !fastEnough) {
+    return false;
+  }
+  const y = to.y + ((edge - to.x) * (to.y - from.y)) / dx;
+  return y >= target.top && y <= target.bottom;
 }
 
 function Submenu({
   section,
   onChoose,
+  isAimingAtOpenSubmenu,
 }: {
   section: MenuSection;
   onChoose: (action: MenuAction) => void;
+  isAimingAtOpenSubmenu: (event: PointerEvent) => boolean;
 }) {
   const submenuId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -93,24 +129,55 @@ function Submenu({
     }
   }
 
-  function scheduleOpen() {
-    clearTimeout(hoverTimer.current);
-    hoverTimer.current = setTimeout(open, 150);
+  function activate() {
+    const button = buttonRef.current;
+    if (button && document.activeElement !== button) {
+      button.focus();
+    }
+    open();
   }
 
-  function cancelOpen() {
+  function enter() {
+    open();
+    const submenu = submenuRef.current;
+    if (submenu) {
+      itemsOf(submenu)[0]?.focus();
+    }
+  }
+
+  function activateOnHover(event: PointerEvent<HTMLButtonElement>) {
     clearTimeout(hoverTimer.current);
+    if (
+      document.activeElement === event.currentTarget &&
+      submenuRef.current?.matches(":popover-open")
+    ) {
+      return;
+    }
+    if (isAimingAtOpenSubmenu(event)) {
+      hoverTimer.current = setTimeout(activate, aimDelay);
+    } else {
+      activate();
+    }
+  }
+
+  function deactivateOnLeave(event: PointerEvent<HTMLButtonElement>) {
+    clearTimeout(hoverTimer.current);
+    unfocusOnLeave(event);
+  }
+
+  function onButtonClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    if (isPointerClick(event)) {
+      activate();
+    } else {
+      enter();
+    }
   }
 
   function onButtonKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      const submenu = submenuRef.current;
-      if (submenu?.matches(":popover-open")) {
-        itemsOf(submenu)[0]?.focus();
-      } else {
-        open();
-      }
+      enter();
     }
   }
 
@@ -137,16 +204,16 @@ function Submenu({
         tabIndex={-1}
         popoverTarget={submenuId}
         popoverTargetAction="show"
+        onClick={onButtonClick}
         onKeyDown={onButtonKeyDown}
-        onPointerEnter={scheduleOpen}
-        onPointerLeave={cancelOpen}
+        onPointerMove={activateOnHover}
+        onPointerLeave={deactivateOnLeave}
         className="flex w-full items-center justify-between gap-8 rounded-md
           px-2.5 py-1.5 text-left text-sm outline-none
-          group-has-open:bg-border/50 hover:bg-border/50
-          focus-visible:bg-border/50"
+          group-has-open:bg-menu-border/50 focus:bg-menu-border/50"
       >
         {section.label}
-        <ChevronRightIcon className="size-3.5 text-muted" />
+        <ChevronRightIcon className="size-3.5 text-menu-muted" />
       </button>
       <div
         ref={submenuRef}
@@ -155,21 +222,18 @@ function Submenu({
         role="menu"
         aria-label={section.label}
         tabIndex={-1}
-        onToggle={(event) => {
-          focusOnOpen(event, buttonRef.current);
-        }}
         onKeyDown={onSubmenuKeyDown}
         className="inset-auto -mt-1.25 ml-2 min-w-56 rounded-lg border
-          border-border bg-chrome p-1 text-foreground shadow-lg outline-none
-          [app-region:no-drag] [position-area:right_span-bottom]
+          border-menu-border bg-menu p-1 text-menu-foreground shadow-lg
+          outline-none [app-region:no-drag] [position-area:right_span-bottom]
           [position-try-fallbacks:flip-inline,flip-block]"
       >
         {section.groups.map((group, index) => (
           <div
             key={index}
             role="group"
-            className="not-first:mt-1 not-first:border-t not-first:border-border
-              not-first:pt-1"
+            className="not-first:mt-1 not-first:border-t
+              not-first:border-menu-border not-first:pt-1"
           >
             {group.map(({ action, label, accelerator }) => (
               <button
@@ -180,13 +244,15 @@ function Submenu({
                 onClick={() => {
                   onChoose(action);
                 }}
+                onPointerMove={focusOnHover}
+                onPointerLeave={unfocusOnLeave}
                 className="flex w-full items-center justify-between gap-8
                   rounded-md px-2.5 py-1.5 text-left text-sm outline-none
-                  hover:bg-border/50 focus-visible:bg-border/50"
+                  focus:bg-menu-border/50"
               >
                 {label}
                 {accelerator && (
-                  <kbd className="font-sans text-xs text-muted">
+                  <kbd className="font-sans text-xs text-menu-muted">
                     {formatAccelerator(accelerator)}
                   </kbd>
                 )}
@@ -204,6 +270,39 @@ export function AppMenu() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<Element | null>(null);
+  const trail = useRef<Point[]>([]);
+
+  function toggle(focusFirstItem: boolean) {
+    const menu = menuRef.current;
+    const button = buttonRef.current;
+    if (!menu || !button) {
+      return;
+    }
+    if (menu.matches(":popover-open")) {
+      menu.hidePopover();
+    } else {
+      menu.showPopover({ source: button });
+      if (focusFirstItem) {
+        itemsOf(menu)[0]?.focus();
+      } else {
+        menu.focus();
+      }
+    }
+  }
+
+  function track(event: PointerEvent<HTMLDivElement>) {
+    trail.current = [...trail.current.slice(1 - trailLength), pointOf(event)];
+  }
+
+  function isAimingAtOpenSubmenu(event: PointerEvent): boolean {
+    const to = pointOf(event);
+    const from = trail.current.find((point) => to.t - point.t <= aimWindow);
+    const submenu = menuRef.current?.querySelector(":popover-open");
+    if (!from || !submenu) {
+      return false;
+    }
+    return isAimingAt(from, to, submenu.getBoundingClientRect());
+  }
 
   function rememberFocus(event: ToggleEvent<HTMLDivElement>) {
     if (event.target === event.currentTarget && event.newState === "open") {
@@ -237,14 +336,25 @@ export function AppMenu() {
         title="Menu"
         aria-haspopup="menu"
         popoverTarget={menuId}
+        onPointerDown={(event) => {
+          if (event.button === 0) {
+            toggle(false);
+          }
+        }}
         onMouseDown={(event) => {
           event.preventDefault();
         }}
+        onClick={(event) => {
+          event.preventDefault();
+          if (!isPointerClick(event)) {
+            toggle(true);
+          }
+        }}
         className="flex size-8 shrink-0 items-center justify-center rounded-md
-          text-foreground transition-colors [app-region:no-drag]
-          hover:bg-border/50 focus-visible:outline-2
-          focus-visible:outline-offset-2 focus-visible:outline-foreground
-          active:bg-border/80 has-[+:popover-open]:bg-border/50"
+          text-foreground [app-region:no-drag] hover:bg-border/50
+          focus-visible:outline-2 focus-visible:outline-offset-2
+          focus-visible:outline-foreground active:bg-border/80
+          has-[+:popover-open]:bg-border/50"
       >
         <Bars3Icon className="size-5" strokeWidth={2.25} />
       </button>
@@ -256,16 +366,19 @@ export function AppMenu() {
         aria-label="Application menu"
         tabIndex={-1}
         onBeforeToggle={rememberFocus}
-        onToggle={(event) => {
-          focusOnOpen(event, buttonRef.current);
-        }}
         onKeyDown={onKeyDown}
-        className="inset-auto mt-2.5 min-w-40 rounded-lg border border-border
-          bg-chrome p-1 text-foreground shadow-lg outline-none
-          [app-region:no-drag] [position-area:bottom_span-right]"
+        onPointerMove={track}
+        className="inset-auto mt-2.5 min-w-40 rounded-lg border
+          border-menu-border bg-menu p-1 text-menu-foreground shadow-lg
+          outline-none [app-region:no-drag] [position-area:bottom_span-right]"
       >
         {sections.map((section) => (
-          <Submenu key={section.label} section={section} onChoose={choose} />
+          <Submenu
+            key={section.label}
+            section={section}
+            onChoose={choose}
+            isAimingAtOpenSubmenu={isAimingAtOpenSubmenu}
+          />
         ))}
       </div>
     </>

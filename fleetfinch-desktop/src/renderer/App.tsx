@@ -3,7 +3,9 @@ import {
   SectionHeading,
   Sidebar,
   type SidebarLink,
+  useSidebarExpanded,
 } from "@fleetfinch/ui";
+import { Cog6ToothIcon, HomeIcon } from "@heroicons/react/24/outline";
 import { Activity, Suspense, useSyncExternalStore } from "react";
 
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
@@ -15,8 +17,8 @@ const homeHref = "#/";
 const settingsHref = "#/settings";
 
 const links: SidebarLink[] = [
-  { href: homeHref, label: "Home" },
-  { href: settingsHref, label: "Settings" },
+  { href: homeHref, label: "Home", icon: HomeIcon },
+  { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
 const placeholderIds = [1, 2, 3, 4];
@@ -39,11 +41,21 @@ function visibleOn(href: string, current: string) {
 
 export function App() {
   const current = useSyncExternalStore(subscribe, currentHref);
+  const [sidebarExpanded, setSidebarExpanded] = useSidebarExpanded();
   return (
     <>
-      <TitleBar title={appName} />
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <Sidebar links={links} current={current} Link="a" />
+      <TitleBar
+        title={appName}
+        sidebarExpanded={sidebarExpanded}
+        onSidebarExpandedChange={setSidebarExpanded}
+      />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar
+          links={links}
+          current={current}
+          expanded={sidebarExpanded}
+          Link="a"
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <Activity mode={visibleOn(homeHref, current)}>
             <AppShell title={appName}>
