@@ -1,5 +1,17 @@
 @source "./";
 
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme="light"], [data-theme="light"] *)) {
+      @slot;
+    }
+  }
+}
+
 @theme {
   --color-*: initial;
   --color-sand-light: #f0e2d6;
@@ -16,6 +28,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: var(--color-sand-light);
   --foreground: var(--color-sand-dark);
   --muted: var(--color-sand-deep);
@@ -30,6 +43,18 @@
   --accent-soft: var(--color-orange-light);
   --accent-soft-foreground: var(--color-orange-dark);
   --accent-border: var(--color-orange-mid);
+
+  @variant dark {
+    color-scheme: dark;
+    --background: var(--color-sand-dark);
+    --foreground: var(--color-sand-light);
+    --muted: var(--color-sand-mid);
+    --primary-soft: var(--color-blue-dark);
+    --primary-soft-foreground: var(--color-blue-light);
+    --primary-border: var(--color-blue-mid);
+    --accent-soft: var(--color-orange-dark);
+    --accent-soft-foreground: var(--color-orange-light);
+  }
 }
 
 @theme inline {
@@ -68,19 +93,6 @@
   --font-savoye-let: "Savoye LET", var(--font-tangerine), cursive;
   --font-superclarendon: "Superclarendon", var(--font-besley), serif;
   --font-thonburi: "Thonburi", var(--font-noto-sans-thai-looped), sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--color-sand-dark);
-    --foreground: var(--color-sand-light);
-    --muted: var(--color-sand-mid);
-    --primary-soft: var(--color-blue-dark);
-    --primary-soft-foreground: var(--color-blue-light);
-    --primary-border: var(--color-blue-mid);
-    --accent-soft: var(--color-orange-dark);
-    --accent-soft-foreground: var(--color-orange-light);
-  }
 }
 
 body {

@@ -9,6 +9,8 @@ function invoke<Method extends keyof Bridge>(method: Method) {
 
 const bridge: Bridge = {
   getAppVersion: invoke("getAppVersion"),
+  getTheme: invoke("getTheme"),
+  setTheme: invoke("setTheme"),
 };
 
 contextBridge.exposeInMainWorld("bridge", bridge);

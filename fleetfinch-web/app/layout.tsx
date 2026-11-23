@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { StoredThemeToggle } from "@/app/_components/StoredThemeToggle.tsx";
 import { fontVariables } from "@/app/_lib/fonts.ts";
 import { site, siteOpenGraph, siteUrl } from "@/app/_lib/site.ts";
+import { themeScript } from "@/app/_lib/theme.ts";
 
 export const metadata: Metadata = {
   metadataBase: siteUrl(),
@@ -14,8 +16,20 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${fontVariables} h-full antialiased`}>
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+    <html
+      lang="en"
+      className={`${fontVariables} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="flex min-h-full flex-col font-sans">
+        <header className="absolute top-3 right-3">
+          <StoredThemeToggle />
+        </header>
+        {children}
+      </body>
     </html>
   );
 }

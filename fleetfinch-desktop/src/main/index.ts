@@ -17,6 +17,7 @@ import { darkColors, lightColors } from "@fleetfinch/ui/colors";
 import { contentSecurityPolicy } from "@/contentSecurityPolicy.ts";
 import { env } from "@/env.ts";
 import { handlers } from "@/main/handlers.ts";
+import { restoreThemePreference } from "@/main/theme.ts";
 
 // Security model. The window is treated as untrusted: it shows data from the
 // API, so everything it can reach is decided here and nothing is left to the
@@ -107,13 +108,17 @@ function openInBrowser(url: string): void {
   }
 }
 
+function windowBackground(): string {
+  return nativeTheme.shouldUseDarkColors
+    ? darkColors.background
+    : lightColors.background;
+}
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 960,
     height: 720,
-    backgroundColor: nativeTheme.shouldUseDarkColors
-      ? darkColors.background
-      : lightColors.background,
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload,
       v8CacheOptions: "bypassHeatCheck",
@@ -134,7 +139,14 @@ function showWindow(): void {
   window.focus();
 }
 
-function start(): void {
+async function start(): Promise<void> {
+  await restoreThemePreference();
+  nativeTheme.on("updated", () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.setBackgroundColor(windowBackground());
+    }
+  });
+
   if (!devServerUrl) {
     protocol.handle("app", serveRendererFile);
   }

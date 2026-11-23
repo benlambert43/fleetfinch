@@ -6,6 +6,7 @@ html {
 
 body {
   display: flex;
+  position: relative;
   flex-direction: column;
   min-width: 300px;
   min-height: 100%;
@@ -171,7 +172,7 @@ h2 {
   width: 1.5rem;
   height: 1.5rem;
   margin-right: 0.75rem;
-  border: 1px solid #c4a78f;
+  border: 1px solid #8a705a;
   border-radius: 0.375rem;
   background-color: #fff8f2;
 }
@@ -379,6 +380,209 @@ h2 {
     width: 15rem;
     margin-bottom: 1.5rem;
   }
+}
+
+.theme-bar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+}
+
+.no-js .theme-bar {
+  display: none;
+}
+
+.theme-toggle {
+  display: flex;
+  border: 1px solid #d4bba6;
+  border-radius: 0.5rem;
+}
+
+.theme-option {
+  display: block;
+  position: relative;
+  border-left: 1px solid #d4bba6;
+  color: #765e49;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+}
+
+.theme-option:first-child {
+  border-left: 0;
+}
+
+.theme-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.theme-face {
+  display: block;
+  padding: 0.75rem;
+}
+
+.theme-option:first-child .theme-face {
+  border-radius: 0.4375rem 0 0 0.4375rem;
+}
+
+.theme-option:last-child .theme-face {
+  border-radius: 0 0.4375rem 0.4375rem 0;
+}
+
+.theme-icon {
+  display: block;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.theme-input:checked + .theme-face {
+  background: #5a422c;
+  color: #f0e2d6;
+}
+
+.theme-input:not(:checked):active + .theme-face {
+  background: #e6d2c1;
+  color: #5a422c;
+}
+
+@media (hover: hover) {
+  .theme-input:not(:checked):hover + .theme-face {
+    background: #e6d2c1;
+    color: #5a422c;
+  }
+}
+
+.theme-input:focus + .theme-face {
+  outline: 2px solid #5a422c;
+  outline-offset: -4px;
+}
+
+.theme-input:checked:focus + .theme-face {
+  outline-color: #f0e2d6;
+}
+
+.theme-dark {
+  color-scheme: dark;
+}
+
+.theme-dark body {
+  background: #5a422c;
+  color: #f0e2d6;
+}
+
+.theme-dark p,
+.theme-dark .steps,
+.theme-dark .checklist-legend,
+.theme-dark .checklist-item,
+.theme-dark .devices ul,
+.theme-dark .device-specs,
+.theme-dark .theme-option {
+  color: #d4bba6;
+}
+
+.theme-dark .device-name {
+  color: #f0e2d6;
+}
+
+.theme-dark .install-error {
+  color: #ffb3a6;
+}
+
+.theme-dark .checklist-box {
+  border-color: #c4a78f;
+  background-color: #4a3524;
+}
+
+.theme-dark .checklist-input:focus + .checklist-box {
+  outline-color: #ffdbbd;
+}
+
+.theme-dark .carbon-link {
+  background: #5b2700;
+  color: #ffdbbd;
+}
+
+.theme-dark .carbon-link:active {
+  background: #fa880d;
+  color: #5b2700;
+}
+
+@media (hover: hover) {
+  .theme-dark .carbon-link:hover {
+    background: #fa880d;
+    color: #5b2700;
+  }
+}
+
+.theme-dark .install-button[aria-disabled="true"],
+.theme-dark .install-button[aria-disabled="true"]:active {
+  border-color: #8a705a;
+  background: #6b5340;
+  color: #c4a78f;
+}
+
+@media (hover: hover) {
+  .theme-dark .install-button[aria-disabled="true"]:hover {
+    background: #6b5340;
+    color: #c4a78f;
+  }
+}
+
+.theme-dark .accordion summary:active {
+  background: #6b5340;
+}
+
+.theme-dark .accordion summary::after {
+  border-color: #d4bba6;
+}
+
+.theme-dark .device-link {
+  border-color: #47cfea;
+  background: #434c6b;
+  color: #c6edf6;
+}
+
+.theme-dark .device-link:active {
+  background: #47cfea;
+  color: #434c6b;
+}
+
+@media (hover: hover) {
+  .theme-dark .device-link:hover {
+    background: #47cfea;
+    color: #434c6b;
+  }
+}
+
+.theme-dark .theme-input:checked + .theme-face {
+  background: #f0e2d6;
+  color: #5a422c;
+}
+
+.theme-dark .theme-input:not(:checked):active + .theme-face {
+  background: #6b5340;
+  color: #f0e2d6;
+}
+
+@media (hover: hover) {
+  .theme-dark .theme-input:not(:checked):hover + .theme-face {
+    background: #6b5340;
+    color: #f0e2d6;
+  }
+}
+
+.theme-dark .theme-input:focus + .theme-face {
+  outline-color: #f0e2d6;
+}
+
+.theme-dark .theme-input:checked:focus + .theme-face {
+  outline-color: #5a422c;
 }
 
 .font-al-nile {
