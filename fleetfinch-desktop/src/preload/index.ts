@@ -5,6 +5,12 @@ import {
   type BridgeMethods,
   windowMaximizedChannel,
 } from "@/bridge.ts";
+import {
+  type BuildToolsLogLine,
+  buildToolsLogChannel,
+  type BuildToolsProgress,
+  buildToolsProgressChannel,
+} from "@/buildTools.ts";
 
 function invoke<Method extends keyof BridgeMethods>(method: Method) {
   return ((...args: Parameters<BridgeMethods[Method]>) =>
@@ -18,6 +24,8 @@ const bridge: Bridge = {
   setTheme: invoke("setTheme"),
   isWindowMaximized: invoke("isWindowMaximized"),
   runMenuAction: invoke("runMenuAction"),
+  getBuildTools: invoke("getBuildTools"),
+  setUpBuildTools: invoke("setUpBuildTools"),
   onWindowMaximizedChange: (listener) => {
     const forward = (_event: IpcRendererEvent, maximized: boolean) => {
       listener(maximized);
@@ -25,6 +33,27 @@ const bridge: Bridge = {
     ipcRenderer.on(windowMaximizedChannel, forward);
     return () => {
       ipcRenderer.off(windowMaximizedChannel, forward);
+    };
+  },
+  onBuildToolsProgress: (listener) => {
+    const forward = (
+      _event: IpcRendererEvent,
+      progress: BuildToolsProgress,
+    ) => {
+      listener(progress);
+    };
+    ipcRenderer.on(buildToolsProgressChannel, forward);
+    return () => {
+      ipcRenderer.off(buildToolsProgressChannel, forward);
+    };
+  },
+  onBuildToolsLog: (listener) => {
+    const forward = (_event: IpcRendererEvent, line: BuildToolsLogLine) => {
+      listener(line);
+    };
+    ipcRenderer.on(buildToolsLogChannel, forward);
+    return () => {
+      ipcRenderer.off(buildToolsLogChannel, forward);
     };
   },
 };

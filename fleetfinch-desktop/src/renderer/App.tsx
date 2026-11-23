@@ -6,8 +6,16 @@ import {
   useSidebarExpanded,
 } from "@fleetfinch/ui";
 import { Cog6ToothIcon, HomeIcon } from "@heroicons/react/24/outline";
-import { Activity, Suspense, useSyncExternalStore } from "react";
+import {
+  Activity,
+  type ReactNode,
+  Suspense,
+  useSyncExternalStore,
+} from "react";
 
+import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
+import { ActivityPane } from "@/renderer/ActivityPane.tsx";
+import { BuildTools } from "@/renderer/BuildTools.tsx";
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
 import { TitleBar } from "@/renderer/TitleBar.tsx";
 
@@ -21,7 +29,19 @@ const links: SidebarLink[] = [
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-const panels = ["Recent Projects", "Devices", "Device Info", "Computer Info"];
+const panels: { title: string; content?: ReactNode }[] = [
+  { title: "Recent Projects" },
+  { title: "Devices" },
+  { title: "Recent Tasks" },
+  {
+    title: "Computer Info",
+    content: (
+      <Suspense>
+        <BuildTools />
+      </Suspense>
+    ),
+  },
+];
 
 function subscribe(listener: () => void): () => void {
   window.addEventListener("hashchange", listener);
@@ -42,14 +62,17 @@ function visibleOn(href: string, current: string) {
 export function App() {
   const current = useSyncExternalStore(subscribe, currentHref);
   const [sidebarExpanded, setSidebarExpanded] = useSidebarExpanded();
+  const activityOpen = useActivityOpen();
   return (
     <>
       <TitleBar
         title={appName}
         sidebarExpanded={sidebarExpanded}
         onSidebarExpandedChange={setSidebarExpanded}
+        activityOpen={activityOpen}
+        onActivityOpenChange={setActivityOpen}
       />
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <Sidebar
           links={links}
           current={current}
@@ -64,16 +87,18 @@ export function App() {
                   className="grid size-full max-h-[calc(800px+var(--gap))]
                     min-h-min max-w-[calc(1200px+var(--gap))]
                     grid-cols-[repeat(2,minmax(200px,1fr))]
-                    grid-rows-[repeat(2,minmax(200px,1fr))] gap-(--gap)
+                    grid-rows-[repeat(2,minmax(min-content,auto))] gap-(--gap)
                     [--gap:--spacing(4)] sm:[--gap:--spacing(6)]
                     lg:[--gap:--spacing(8)] xl:size-19/20"
                 >
                   {panels.map((panel) => (
                     <section
-                      key={panel}
-                      className="rounded-2xl border-2 border-border p-4"
+                      key={panel.title}
+                      className="flex min-h-50 flex-col gap-3 rounded-2xl
+                        border-2 border-border p-4"
                     >
-                      <SectionHeading>{panel}</SectionHeading>
+                      <SectionHeading>{panel.title}</SectionHeading>
+                      {panel.content}
                     </section>
                   ))}
                 </div>
@@ -91,6 +116,7 @@ export function App() {
             </AppShell>
           </Activity>
         </div>
+        <ActivityPane open={activityOpen} />
       </div>
     </>
   );
