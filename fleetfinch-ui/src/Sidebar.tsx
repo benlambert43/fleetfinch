@@ -74,10 +74,10 @@ export function Sidebar<Href extends string>({
               href={href}
               title={expanded ? undefined : label}
               aria-current={href === current ? "page" : undefined}
-              className="flex h-10 items-center gap-3 rounded-lg px-3
-                text-[17px] text-muted hover:bg-foreground/5
-                hover:text-foreground focus-visible:outline-2
-                focus-visible:-outline-offset-2 focus-visible:outline-foreground
+              className="flex h-10 items-center gap-3 rounded-lg px-3 text-body
+                text-muted hover:bg-foreground/5 hover:text-foreground
+                focus-visible:outline-2 focus-visible:-outline-offset-2
+                focus-visible:outline-foreground
                 aria-[current=page]:bg-foreground/10
                 aria-[current=page]:text-foreground"
             >

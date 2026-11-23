@@ -18,5 +18,5 @@ export function AppShell({
 }
 
 export function SectionHeading({ children }: { children: ReactNode }) {
-  return <h2 className="text-sm font-medium text-muted">{children}</h2>;
+  return <h2 className="text-headline text-muted">{children}</h2>;
 }

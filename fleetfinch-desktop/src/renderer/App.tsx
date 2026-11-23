@@ -61,12 +61,12 @@ export function App() {
             <AppShell title={appName}>
               <div className="flex flex-1 items-center justify-center">
                 <div
-                  className="grid size-full max-h-[calc(1200px+var(--gap))]
+                  className="grid size-full max-h-[calc(800px+var(--gap))]
                     min-h-min max-w-[calc(1200px+var(--gap))]
                     grid-cols-[repeat(2,minmax(200px,1fr))]
                     grid-rows-[repeat(2,minmax(200px,1fr))] gap-(--gap)
                     [--gap:--spacing(4)] sm:[--gap:--spacing(6)]
-                    lg:[--gap:--spacing(8)] xl:size-4/5"
+                    lg:[--gap:--spacing(8)] xl:size-19/20"
                 >
                   {panels.map((panel) => (
                     <section

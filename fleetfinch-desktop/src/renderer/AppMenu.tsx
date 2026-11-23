@@ -209,7 +209,7 @@ function Submenu({
         onPointerMove={activateOnHover}
         onPointerLeave={deactivateOnLeave}
         className="flex w-full items-center justify-between gap-8 rounded-md
-          px-2.5 py-1.5 text-left text-sm outline-none
+          px-2.5 py-1.5 text-left text-body outline-none
           group-has-open:bg-menu-border/50 focus:bg-menu-border/50"
       >
         {section.label}
@@ -247,12 +247,12 @@ function Submenu({
                 onPointerMove={focusOnHover}
                 onPointerLeave={unfocusOnLeave}
                 className="flex w-full items-center justify-between gap-8
-                  rounded-md px-2.5 py-1.5 text-left text-sm outline-none
+                  rounded-md px-2.5 py-1.5 text-left text-body outline-none
                   focus:bg-menu-border/50"
               >
                 {label}
                 {accelerator && (
-                  <kbd className="font-sans text-xs text-menu-muted">
+                  <kbd className="font-sans text-subheadline text-menu-muted">
                     {formatAccelerator(accelerator)}
                   </kbd>
                 )}

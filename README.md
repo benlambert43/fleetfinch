@@ -199,6 +199,15 @@ A component belongs in `fleetfinch-ui` when more than one app shows it, or could
 
 Two substitutes fall short of their Apple font. Besley starts at Regular, so Superclarendon Light falls back to it. Noto Sans Mono has no italic, so the browser slants the upright, as Menlo's italic does.
 
+The desktop app sets its text in the Dynamic Type styles of iOS 7, at the sizes iOS 7 gives them by default, and `theme.css` has a size utility for each one it uses. Page titles are `text-3xl font-light`, in the large, light type that iOS 7 used for display text. The weights are Light, Regular, and Medium, never Semibold, since Helvetica Neue has no Semibold and shows Bold in its place.
+
+| Utility            | Size and weight    | Used for                           |
+| ------------------ | ------------------ | ---------------------------------- |
+| `text-headline`    | 17 pixels, Medium  | The title bar and section headings |
+| `text-body`        | 17 pixels, Regular | Sidebar links and menu commands    |
+| `text-subheadline` | 15 pixels, Regular | Keyboard shortcuts in the menu     |
+| `text-footnote`    | 13 pixels, Regular | The labels of the theme toggle     |
+
 ## Web app
 
 The web app's home page has the same content as `fleetfinch-lite`, the version of it for Safari 9, so change the two together. It keeps the lite site's look and behavior but uses what a current browser offers:

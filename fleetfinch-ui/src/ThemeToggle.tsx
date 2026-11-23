@@ -42,7 +42,7 @@ const styles = {
   labels: {
     group: "flex overflow-hidden rounded-lg border-2 border-foreground",
     option:
-      "flex h-9 items-center gap-1.5 px-3 text-sm not-first:border-l-2 not-first:border-foreground",
+      "flex h-9 items-center gap-1.5 px-3 text-footnote not-first:border-l-2 not-first:border-foreground",
     icon: "size-4.5",
   },
 };

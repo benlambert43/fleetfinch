@@ -27,6 +27,15 @@
   --color-orange-dark: #5b2700;
   --color-red-light: #ffb3a6;
   --color-red-deep: #a3291a;
+  --text-headline: 1.0625rem;
+  --text-headline--line-height: 1.375rem;
+  --text-headline--font-weight: 500;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.375rem;
+  --text-subheadline: 0.9375rem;
+  --text-subheadline--line-height: 1.25rem;
+  --text-footnote: 0.8125rem;
+  --text-footnote--line-height: 1.125rem;
 }
 
 :root {
