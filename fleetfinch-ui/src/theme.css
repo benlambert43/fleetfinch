@@ -30,6 +30,7 @@
 :root {
   color-scheme: light;
   --background: var(--color-sand-light);
+  --chrome: color-mix(in oklab, var(--background) 98%, black);
   --foreground: var(--color-sand-dark);
   --muted: var(--color-sand-deep);
   --border: var(--color-sand-mid);
@@ -47,6 +48,7 @@
   @variant dark {
     color-scheme: dark;
     --background: var(--color-sand-dark);
+    --chrome: color-mix(in oklab, var(--background) 91%, black);
     --foreground: var(--color-sand-light);
     --muted: var(--color-sand-mid);
     --primary-soft: var(--color-blue-dark);
@@ -59,6 +61,7 @@
 
 @theme inline {
   --color-background: var(--background);
+  --color-chrome: var(--chrome);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);

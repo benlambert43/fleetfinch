@@ -14,9 +14,11 @@ import {
 
 import { darkColors, lightColors } from "@fleetfinch/ui/colors";
 
+import { windowMaximizedChannel } from "@/bridge.ts";
 import { contentSecurityPolicy } from "@/contentSecurityPolicy.ts";
 import { env } from "@/env.ts";
 import { handlers } from "@/main/handlers.ts";
+import { setApplicationMenu } from "@/main/menu.ts";
 import { restoreThemePreference } from "@/main/theme.ts";
 
 // Security model. The window is treated as untrusted: it shows data from the
@@ -118,12 +120,18 @@ function createWindow(): void {
   const window = new BrowserWindow({
     width: 960,
     height: 720,
+    frame: false,
     backgroundColor: windowBackground(),
     webPreferences: {
       preload,
       v8CacheOptions: "bypassHeatCheck",
     },
   });
+  const sendMaximized = () => {
+    window.webContents.send(windowMaximizedChannel, window.isMaximized());
+  };
+  window.on("maximize", sendMaximized);
+  window.on("unmaximize", sendMaximized);
   void window.loadURL(new URL("/index.html", renderer).href);
 }
 
@@ -162,13 +170,15 @@ async function start(): Promise<void> {
 
   for (const [method, handler] of Object.entries(handlers)) {
     ipcMain.handle(method, (event, ...args: unknown[]) => {
-      if (!isRenderer(event.senderFrame?.url)) {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window || !isRenderer(event.senderFrame?.url)) {
         throw new Error(`Refused ${method} from an unexpected sender`);
       }
-      return handler(...args);
+      return handler(window, ...args);
     });
   }
 
+  setApplicationMenu();
   createWindow();
   app.on("activate", showWindow);
   app.on("second-instance", showWindow);
