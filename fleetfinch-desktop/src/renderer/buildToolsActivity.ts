@@ -8,6 +8,7 @@ import {
 } from "@/buildTools.ts";
 import {
   appendTaskLog,
+  recordCommand,
   startTask,
   type Task,
   type TaskStep,
@@ -56,6 +57,9 @@ function showProgress({ step, message, fraction }: BuildToolsProgress): void {
 
 function showLog(line: BuildToolsLogLine): void {
   appendTaskLog(taskId, [line]);
+  if (line.kind === "command") {
+    recordCommand(line.text, "computer");
+  }
 }
 
 function fail(
@@ -78,10 +82,10 @@ function fail(
 window.bridge.onBuildToolsProgress(showProgress);
 window.bridge.onBuildToolsLog(showLog);
 
-export function startBuildToolsTask(): void {
+export function startBuildToolsTask(title = "Set up build tools"): void {
   startTask({
     id: taskId,
-    title: "Set up build tools",
+    title,
     steps: buildToolSteps.map((step) => ({
       id: step,
       label: buildToolLabels[step],

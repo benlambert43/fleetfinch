@@ -2,16 +2,20 @@ import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { type BuildToolsStatus, buildTarget } from "@/buildTools.ts";
-import { installReleaseArchive } from "@/main/buildTools/archive.ts";
+import {
+  installReleaseArchive,
+  removeArchiveInstall,
+} from "@/main/buildTools/archive.ts";
 import { latestReleaseAsset } from "@/main/buildTools/github.ts";
 import {
   exists,
+  forgetRelease,
   readReleases,
   saveRelease,
   sdkFolder,
   sdksFolder,
 } from "@/main/buildTools/paths.ts";
-import type { Report } from "@/main/buildTools/process.ts";
+import { type Report, StepError } from "@/main/buildTools/process.ts";
 
 const sdkRepository = "theos/sdks";
 const sdkName = `${buildTarget.sdk}.sdk`;
@@ -156,6 +160,15 @@ async function isSdkAdjusted(folder: string): Promise<boolean> {
 }
 
 async function adjustSdk(folder: string, report: Report): Promise<void> {
+  await applyAdjustments(folder, report);
+  if (!(await isSdkAdjusted(folder))) {
+    throw new StepError(
+      `The iOS ${buildTarget.sdkVersion} SDK could not be adjusted for this toolchain.`,
+    );
+  }
+}
+
+async function applyAdjustments(folder: string, report: Report): Promise<void> {
   report.progress(
     `Adjusting the iOS ${buildTarget.sdkVersion} SDK for this toolchain`,
     0,
@@ -191,6 +204,14 @@ export async function readSdk(): Promise<BuildToolsStatus["sdk"]> {
     release: (await readReleases()).sdk ?? null,
     adjusted: await isSdkAdjusted(folder),
   };
+}
+
+export async function cleanSdk(report: Report): Promise<void> {
+  report.progress(
+    `Removing the failed iOS ${buildTarget.sdkVersion} SDK install`,
+  );
+  await removeArchiveInstall(sdkFolder(), sdksFolder());
+  await forgetRelease("sdk");
 }
 
 export async function installSdk(report: Report): Promise<void> {

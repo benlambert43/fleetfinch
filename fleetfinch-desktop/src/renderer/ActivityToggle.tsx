@@ -31,8 +31,7 @@ export function ActivityToggle({
         className="size-4.5"
       >
         <rect x="3" y="4" width="18" height="16" rx="2" />
-        <path d="M15 4v16" />
-        <path d={open ? "m8 15 3-3-3-3" : "m11 9-3 3 3 3"} />
+        <path d={open ? "m10.5 15 3-3-3-3" : "m13.5 9-3 3 3 3"} />
       </svg>
     </button>
   );

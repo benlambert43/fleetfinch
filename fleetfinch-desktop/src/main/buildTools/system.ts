@@ -10,12 +10,14 @@ import {
   PasswordNeeded,
   type ProcessResult,
   type Report,
+  type StepOptions,
   runProcess,
   StepError,
 } from "@/main/buildTools/process.ts";
 
 const dpkgQueryFile = "/usr/bin/dpkg-query";
 const aptGetFile = "/usr/bin/apt-get";
+const dpkgFile = "/usr/bin/dpkg";
 const pkexecFile = "/usr/bin/pkexec";
 const sudoFile = "/usr/bin/sudo";
 const suFile = "/bin/su";
@@ -32,9 +34,15 @@ function plainEnvironment(): NodeJS.ProcessEnv {
   return { ...process.env, LC_ALL: "C", LANGUAGE: "C", SHELL: shellFile };
 }
 
-function installCommand(packages: SystemPackage[]): string {
+function installCommand(packages: SystemPackage[], repair: boolean): string {
   return [
     "export DEBIAN_FRONTEND=noninteractive",
+    ...(repair
+      ? [
+          `${dpkgFile} --configure -a`,
+          `${aptGetFile} -o DPkg::Lock::Timeout=300 install --fix-broken --yes`,
+        ]
+      : []),
     `${aptGetFile} -o DPkg::Lock::Timeout=300 update`,
     `${aptGetFile} -o DPkg::Lock::Timeout=300 install --yes --no-install-recommends -- ${packages.join(" ")}`,
   ].join("; ");
@@ -128,11 +136,11 @@ function withSu(
 
 async function runInstall(
   missing: SystemPackage[],
-  password: string | undefined,
+  { password, clean }: StepOptions,
   report: Report,
 ): Promise<ProcessResult> {
   const listed = missing.join(", ");
-  const command = installCommand(missing);
+  const command = installCommand(missing, clean);
   if (process.getuid?.() === 0) {
     report.progress(`Installing ${listed}`);
     return asRoot(command, report.log);
@@ -176,7 +184,7 @@ async function runInstall(
 
 export async function installSystemPackages(
   report: Report,
-  password: string | undefined,
+  options: StepOptions,
 ): Promise<void> {
   const missing = (await readSystemPackages())
     .filter((item) => !item.installed)
@@ -191,7 +199,10 @@ export async function installSystemPackages(
       `This computer has no apt-get to install ${listed} with. FleetFinch Developer needs a Debian-based system, such as Debian or Ubuntu.`,
     );
   }
-  const { code, output } = await runInstall(missing, password, report);
+  if (options.clean) {
+    report.progress("Repairing apt and dpkg before installing again");
+  }
+  const { code, output } = await runInstall(missing, options, report);
   if (code !== 0) {
     throw new StepError(`apt-get could not install ${listed}.`, output);
   }

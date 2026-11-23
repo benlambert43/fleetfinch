@@ -30,7 +30,7 @@ export function TitleBar({
         <span className="truncate text-headline">{title}</span>
         <WindowControls />
       </div>
-      <div className="flex h-7 items-center gap-1 px-0.5">
+      <div className="flex h-7 items-center justify-end gap-1">
         <ActivityToggle
           open={activityOpen}
           onOpenChange={onActivityOpenChange}

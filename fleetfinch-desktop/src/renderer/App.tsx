@@ -16,7 +16,10 @@ import {
 import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
 import { ActivityPane } from "@/renderer/ActivityPane.tsx";
 import { BuildTools } from "@/renderer/BuildTools.tsx";
+import { Devices } from "@/renderer/Devices.tsx";
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
+import { RecentProjects } from "@/renderer/RecentProjects.tsx";
+import { RecentTasks } from "@/renderer/RecentTasks.tsx";
 import { TitleBar } from "@/renderer/TitleBar.tsx";
 
 const appName = "FleetFinch Developer";
@@ -29,10 +32,10 @@ const links: SidebarLink[] = [
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-const panels: { title: string; content?: ReactNode }[] = [
-  { title: "Recent Projects" },
-  { title: "Devices" },
-  { title: "Recent Tasks" },
+const panels: { title: string; content: ReactNode }[] = [
+  { title: "Recent Projects", content: <RecentProjects /> },
+  { title: "Devices", content: <Devices /> },
+  { title: "Recent Tasks", content: <RecentTasks /> },
   {
     title: "Computer Info",
     content: (

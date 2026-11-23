@@ -4,6 +4,7 @@ import type {
   BuildToolsLogLine,
   BuildToolsProgress,
   BuildToolsSetup,
+  BuildToolsSetUpOptions,
   BuildToolsStatus,
 } from "@/buildTools.ts";
 import type { MenuAction } from "@/menu.ts";
@@ -17,7 +18,9 @@ export interface BridgeMethods {
   isWindowMaximized: () => Promise<boolean>;
   runMenuAction: (action: MenuAction) => Promise<void>;
   getBuildTools: () => Promise<BuildToolsStatus>;
-  setUpBuildTools: (password?: string) => Promise<BuildToolsSetup>;
+  setUpBuildTools: (
+    options?: BuildToolsSetUpOptions,
+  ) => Promise<BuildToolsSetup>;
 }
 
 export interface Bridge extends BridgeMethods {

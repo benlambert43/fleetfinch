@@ -1,9 +1,11 @@
 import { app, type BrowserWindow } from "electron";
+import { z } from "zod";
 
 import type { BridgeMethods } from "@/bridge.ts";
 import {
   buildToolsLogChannel,
   buildToolsProgressChannel,
+  buildToolSteps,
 } from "@/buildTools.ts";
 import { readBuildTools, setUpBuildTools } from "@/main/buildTools/setup.ts";
 import { runMenuAction } from "@/main/menu.ts";
@@ -16,6 +18,13 @@ type Handlers = {
   ) => ReturnType<BridgeMethods[Method]>;
 };
 
+const setUpOptionsSchema = z
+  .strictObject({
+    password: z.string().optional(),
+    clean: z.enum(buildToolSteps).optional(),
+  })
+  .optional();
+
 export const handlers: Handlers = {
   getAppVersion: () => Promise.resolve(app.getVersion()),
   getTheme: () => Promise.resolve(getThemePreference()),
@@ -23,9 +32,10 @@ export const handlers: Handlers = {
   isWindowMaximized: (window) => Promise.resolve(window.isMaximized()),
   runMenuAction: (window, action) => runMenuAction(window, action),
   getBuildTools: () => readBuildTools(),
-  setUpBuildTools: (window, password) => {
-    if (password !== undefined && typeof password !== "string") {
-      return Promise.reject(new Error("Refused a password that is not text"));
+  setUpBuildTools: (window, options) => {
+    const parsed = setUpOptionsSchema.safeParse(options);
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused unknown build tools options"));
     }
     const send = (channel: string, payload: unknown) => {
       if (!window.isDestroyed()) {
@@ -41,7 +51,7 @@ export const handlers: Handlers = {
           send(buildToolsLogChannel, line);
         },
       },
-      password,
+      parsed.data,
     );
   },
 };

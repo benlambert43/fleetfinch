@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { downloadAsset, type ReleaseAsset } from "@/main/buildTools/github.ts";
@@ -6,6 +6,7 @@ import { exists } from "@/main/buildTools/paths.ts";
 import { type Report, runStep, StepError } from "@/main/buildTools/process.ts";
 
 const tarFile = "/usr/bin/tar";
+const stagingPrefix = ".installing-";
 
 export async function installReleaseArchive({
   asset,
@@ -25,7 +26,7 @@ export async function installReleaseArchive({
   prepare?: (folder: string) => Promise<void>;
 }): Promise<void> {
   await mkdir(parent, { recursive: true });
-  const staging = await mkdtemp(path.join(parent, ".installing-"));
+  const staging = await mkdtemp(path.join(parent, stagingPrefix));
   try {
     const file = path.join(staging, asset.name);
     report.progress(`Downloading ${asset.name} from ${asset.release}`, 0);
@@ -58,5 +59,18 @@ export async function installReleaseArchive({
     await rename(folder, target);
   } finally {
     await rm(staging, { recursive: true, force: true });
+  }
+}
+
+export async function removeArchiveInstall(
+  target: string,
+  parent: string,
+): Promise<void> {
+  await rm(target, { recursive: true, force: true });
+  const leftovers = (await readdir(parent).catch((): string[] => [])).filter(
+    (name) => name.startsWith(stagingPrefix),
+  );
+  for (const name of leftovers) {
+    await rm(path.join(parent, name), { recursive: true, force: true });
   }
 }

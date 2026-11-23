@@ -7,6 +7,7 @@ import { use, useEffect, useId, useState, useTransition } from "react";
 import {
   areBuildToolsReady,
   type BuildToolsProgress,
+  type BuildToolsSetUpOptions,
   type BuildToolsStatus,
   type BuildToolStep,
   buildToolLabels,
@@ -19,24 +20,28 @@ import {
   finishBuildToolsTask,
   startBuildToolsTask,
 } from "@/renderer/buildToolsActivity.ts";
+import {
+  PanelActions,
+  PanelBody,
+  primaryButton,
+  StatusList,
+  StatusRow,
+} from "@/renderer/Panel.tsx";
 
 interface Problem {
   message: string;
   output: string;
+  step: BuildToolStep | null;
 }
 
 interface PasswordRequest {
   account: PasswordAccount;
   packages: SystemPackage[];
   message: string | null;
+  clean: BuildToolStep | undefined;
 }
 
 const savedStatus = window.bridge.getBuildTools();
-
-const primaryButton = `h-9 rounded-lg bg-primary px-3 text-subheadline
-  text-primary-foreground hover:opacity-90 focus-visible:outline-2
-  focus-visible:outline-offset-2 focus-visible:outline-foreground
-  disabled:opacity-60`;
 
 function describe(step: BuildToolStep, status: BuildToolsStatus): string {
   switch (step) {
@@ -100,12 +105,16 @@ export function BuildTools() {
   const ready = readyBuildTools(status);
   const busy = pending || progress !== null;
 
-  function setUp(password?: string) {
+  function setUp(options: BuildToolsSetUpOptions = {}) {
     setProblem(null);
-    startBuildToolsTask();
+    startBuildToolsTask(
+      options.clean === undefined
+        ? undefined
+        : `Retry ${buildToolLabels[options.clean]}`,
+    );
     startTransition(async () => {
       const result = await window.bridge
-        .setUpBuildTools(password)
+        .setUpBuildTools(options)
         .catch((error: unknown) => ({
           state: "error" as const,
           message: error instanceof Error ? error.message : String(error),
@@ -114,7 +123,7 @@ export function BuildTools() {
       startTransition(() => {
         setProgress(null);
         if (result.state === "error") {
-          setProblem({ message: result.message, output: "" });
+          setProblem({ message: result.message, output: "", step: null });
           return;
         }
         setStatus(result.status);
@@ -124,6 +133,7 @@ export function BuildTools() {
                 account: result.account,
                 packages: result.packages,
                 message: result.message,
+                clean: options.clean,
               }
             : null,
         );
@@ -132,6 +142,7 @@ export function BuildTools() {
             ? {
                 message: `${buildToolLabels[result.step]}: ${result.message}`,
                 output: result.output,
+                step: result.step,
               }
             : null,
         );
@@ -142,41 +153,36 @@ export function BuildTools() {
   function submitPassword(form: FormData) {
     const password = form.get("password");
     if (typeof password === "string" && password !== "") {
-      setUp(password);
+      setUp({ password, clean: request?.clean });
     }
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4">
-      <dl className="flex flex-col gap-3">
+    <PanelBody>
+      <StatusList>
         {buildToolSteps.map((step) => (
-          <div key={step} className="flex items-start gap-2">
-            {ready[step] ? (
-              <CheckCircleIcon
-                aria-hidden="true"
-                className="size-5 shrink-0 text-foreground"
-              />
-            ) : (
-              <ExclamationCircleIcon
-                aria-hidden="true"
-                className="size-5 shrink-0 text-danger"
-              />
-            )}
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-              <dt className="text-subheadline">
-                {buildToolLabels[step]}
-                <span className="sr-only">
-                  {ready[step] ? ", ready" : ", needs setting up"}
-                </span>
-              </dt>
-              <dd className="text-footnote wrap-break-word text-muted">
-                {describe(step, status)}
-              </dd>
-            </div>
-          </div>
+          <StatusRow
+            key={step}
+            icon={
+              ready[step] ? (
+                <CheckCircleIcon
+                  aria-hidden="true"
+                  className="size-5 shrink-0 text-foreground"
+                />
+              ) : (
+                <ExclamationCircleIcon
+                  aria-hidden="true"
+                  className="size-5 shrink-0 text-danger"
+                />
+              )
+            }
+            title={buildToolLabels[step]}
+            state={ready[step] ? "ready" : "needs setting up"}
+            description={describe(step, status)}
+          />
         ))}
-      </dl>
-      <div className="mt-auto flex flex-col items-start gap-4">
+      </StatusList>
+      <PanelActions>
         {progress !== null && (
           <div role="status" className="flex flex-col gap-1 self-stretch">
             <p className="text-footnote wrap-break-word">
@@ -205,7 +211,7 @@ export function BuildTools() {
             )}
           </div>
         )}
-        {request === null ? (
+        {request === null && problem === null && (
           <button
             type="button"
             onClick={() => {
@@ -216,7 +222,25 @@ export function BuildTools() {
           >
             {buttonLabel(busy, areBuildToolsReady(status))}
           </button>
-        ) : (
+        )}
+        {request === null && problem !== null && (
+          <button
+            type="button"
+            title={
+              problem.step === null
+                ? "Try again"
+                : `Clean up the failed ${buildToolLabels[problem.step]} install and try again`
+            }
+            onClick={() => {
+              setUp({ clean: problem.step ?? undefined });
+            }}
+            disabled={busy}
+            className={primaryButton}
+          >
+            Retry
+          </button>
+        )}
+        {request !== null && (
           <form
             action={submitPassword}
             className="flex flex-col gap-2 self-stretch"
@@ -268,7 +292,7 @@ export function BuildTools() {
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </PanelActions>
+    </PanelBody>
   );
 }

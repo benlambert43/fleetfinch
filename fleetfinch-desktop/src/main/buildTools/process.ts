@@ -25,6 +25,11 @@ export interface Report {
   log: Log;
 }
 
+export interface StepOptions {
+  password: string | undefined;
+  clean: boolean;
+}
+
 export class StepError extends Error {
   readonly output: string;
 

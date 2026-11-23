@@ -1,9 +1,13 @@
 import path from "node:path";
 
 import { type BuildToolsStatus, buildTarget } from "@/buildTools.ts";
-import { installReleaseArchive } from "@/main/buildTools/archive.ts";
+import {
+  installReleaseArchive,
+  removeArchiveInstall,
+} from "@/main/buildTools/archive.ts";
 import { latestReleaseAsset } from "@/main/buildTools/github.ts";
 import {
+  forgetRelease,
   iosToolchainFolder,
   isExecutable,
   readReleases,
@@ -55,6 +59,12 @@ export async function readToolchain(): Promise<BuildToolsStatus["toolchain"]> {
   };
 }
 
+export async function cleanToolchain(report: Report): Promise<void> {
+  report.progress("Removing the failed iOS toolchain install");
+  await removeArchiveInstall(iosToolchainFolder(), toolchainParentFolder());
+  await forgetRelease("toolchain");
+}
+
 export async function installToolchain(report: Report): Promise<void> {
   const architecture = architectures[process.arch];
   if (!architecture) {
@@ -71,6 +81,7 @@ export async function installToolchain(report: Report): Promise<void> {
   if (
     current?.release === asset.release &&
     current.clang !== null &&
+    current.armv7 &&
     current.ldid
   ) {
     report.progress(

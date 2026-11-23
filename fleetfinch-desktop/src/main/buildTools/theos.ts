@@ -5,6 +5,8 @@ import type { BuildToolsStatus } from "@/buildTools.ts";
 import {
   buildToolsFolder,
   exists,
+  iosToolchainFolder,
+  sdkFolder,
   theosFolder,
 } from "@/main/buildTools/paths.ts";
 import {
@@ -13,6 +15,7 @@ import {
   runProcess,
   runStep,
   StepError,
+  type StepOptions,
 } from "@/main/buildTools/process.ts";
 
 const theosRepository = "https://github.com/theos/theos.git";
@@ -91,9 +94,51 @@ async function cloneTheos(folder: string, report: Report): Promise<void> {
   }
 }
 
-export async function installTheos(report: Report): Promise<void> {
+async function replaceTheos(folder: string, report: Report): Promise<void> {
+  const staging = `${folder}.cloning`;
+  const previous = `${folder}.previous`;
+  const kept = [iosToolchainFolder(), sdkFolder()].map((inside) =>
+    path.relative(folder, inside),
+  );
+  await rm(staging, { recursive: true, force: true });
+  await rm(previous, { recursive: true, force: true });
+  await mkdir(buildToolsFolder(), { recursive: true });
+  try {
+    report.progress("Cloning a fresh copy of Theos and its submodules");
+    await git(
+      ["clone", "--recursive", theosRepository, staging],
+      "Theos could not be cloned.",
+      report.log,
+    );
+    if (!(await isTheos(staging))) {
+      throw new StepError(`The clone of ${theosRepository} is not Theos.`);
+    }
+    for (const inside of kept) {
+      if (await exists(path.join(folder, inside))) {
+        await mkdir(path.dirname(path.join(staging, inside)), {
+          recursive: true,
+        });
+        await rename(path.join(folder, inside), path.join(staging, inside));
+      }
+    }
+    if (await exists(folder)) {
+      await rename(folder, previous);
+    }
+    await rename(staging, folder);
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+    await rm(previous, { recursive: true, force: true });
+  }
+}
+
+export async function installTheos(
+  report: Report,
+  { clean }: StepOptions,
+): Promise<void> {
   const folder = theosFolder();
-  if (await isTheos(folder)) {
+  if (clean) {
+    await replaceTheos(folder, report);
+  } else if (await isTheos(folder)) {
     await updateTheos(folder, report);
   } else {
     await cloneTheos(folder, report);

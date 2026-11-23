@@ -71,3 +71,10 @@ export async function saveRelease(
   const releases = { ...(await readReleases()), [tool]: release };
   await writeFile(releasesFile(), `${JSON.stringify(releases, null, 2)}\n`);
 }
+
+export async function forgetRelease(
+  tool: keyof InstalledReleases,
+): Promise<void> {
+  const { [tool]: _forgotten, ...rest } = await readReleases();
+  await writeFile(releasesFile(), `${JSON.stringify(rest, null, 2)}\n`);
+}

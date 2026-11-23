@@ -2,6 +2,7 @@ import {
   type BuildToolsLogLine,
   type BuildToolsProgress,
   type BuildToolsSetup,
+  type BuildToolsSetUpOptions,
   type BuildToolsStatus,
   type BuildToolStep,
   buildToolSteps,
@@ -11,25 +12,31 @@ import {
   PasswordNeeded,
   type Report,
   StepError,
+  type StepOptions,
 } from "@/main/buildTools/process.ts";
-import { installSdk, readSdk } from "@/main/buildTools/sdk.ts";
+import { cleanSdk, installSdk, readSdk } from "@/main/buildTools/sdk.ts";
 import {
   installSystemPackages,
   readSystemPackages,
 } from "@/main/buildTools/system.ts";
 import { installTheos, readTheos } from "@/main/buildTools/theos.ts";
 import {
+  cleanToolchain,
   installToolchain,
   readToolchain,
 } from "@/main/buildTools/toolchain.ts";
 
 const installers: Record<
   BuildToolStep,
-  (report: Report, password: string | undefined) => Promise<void>
+  (report: Report, options: StepOptions) => Promise<void>
 > = {
   system: installSystemPackages,
   theos: installTheos,
-  toolchain: async (report) => {
+  toolchain: async (report, { clean }) => {
+    if (clean) {
+      await cleanToolchain(report);
+      await cleanSdk(report);
+    }
     await installToolchain(report);
     await installSdk(report);
   },
@@ -78,11 +85,14 @@ function reporter(step: BuildToolStep, listener: BuildToolsListener): Report {
 
 async function setUp(
   listener: BuildToolsListener,
-  password: string | undefined,
+  { password, clean }: BuildToolsSetUpOptions,
 ): Promise<BuildToolsSetup> {
   for (const step of buildToolSteps) {
     try {
-      await installers[step](reporter(step, listener), password);
+      await installers[step](reporter(step, listener), {
+        password,
+        clean: clean === step,
+      });
     } catch (error) {
       if (error instanceof PasswordNeeded) {
         return {
@@ -108,9 +118,9 @@ async function setUp(
 
 export function setUpBuildTools(
   listener: BuildToolsListener,
-  password?: string,
+  options: BuildToolsSetUpOptions = {},
 ): Promise<BuildToolsSetup> {
-  running ??= setUp(listener, password).finally(() => {
+  running ??= setUp(listener, options).finally(() => {
     running = null;
   });
   return running;

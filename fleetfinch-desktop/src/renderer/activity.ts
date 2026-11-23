@@ -2,6 +2,13 @@ import { useSyncExternalStore } from "react";
 
 export type TaskState = "running" | "waiting" | "done" | "failed";
 
+export const taskStateLabels: Record<TaskState, string> = {
+  running: "Running",
+  waiting: "Waiting for you",
+  done: "Done",
+  failed: "Failed",
+};
+
 export type StepState = "pending" | "running" | "waiting" | "done" | "failed";
 
 export type LogKind = "message" | "command" | "output" | "error";
@@ -28,15 +35,27 @@ export interface Task {
   log: LogEntry[];
 }
 
+export type CommandTarget = "computer" | "device";
+
+export interface CommandRecord {
+  id: number;
+  text: string;
+  target: CommandTarget;
+  at: number;
+}
+
 interface Activity {
   open: boolean;
   tasks: Task[];
+  history: CommandRecord[];
 }
 
 const logLimit = 2000;
+const historyLimit = 10;
 
-let activity: Activity = { open: false, tasks: [] };
+let activity: Activity = { open: false, tasks: [], history: [] };
 let nextLogId = 0;
+let nextCommandId = 0;
 const listeners = new Set<() => void>();
 
 function update(change: (current: Activity) => Activity): void {
@@ -65,6 +84,10 @@ function getTasks(): readonly Task[] {
   return activity.tasks;
 }
 
+function getHistory(): readonly CommandRecord[] {
+  return activity.history;
+}
+
 function hasNews(before: Task, after: Task): boolean {
   return (
     after.state !== before.state ||
@@ -81,6 +104,10 @@ export function useActivityOpen(): boolean {
 
 export function useActivityTasks(): readonly Task[] {
   return useSyncExternalStore(subscribe, getTasks);
+}
+
+export function useCommandHistory(): readonly CommandRecord[] {
+  return useSyncExternalStore(subscribe, getHistory);
 }
 
 export function setActivityOpen(open: boolean): void {
@@ -109,6 +136,7 @@ export function startTask({
     log: [],
   };
   update((current) => ({
+    ...current,
     open: true,
     tasks: [task, ...current.tasks.filter((other) => other.id !== id)],
   }));
@@ -122,6 +150,7 @@ export function updateTask(id: string, change: (task: Task) => Task): void {
     }
     const after = change(before);
     return {
+      ...current,
       open: current.open || hasNews(before, after),
       tasks: current.tasks.map((task) => (task === before ? after : task)),
     };
@@ -136,5 +165,13 @@ export function appendTaskLog(
   updateTask(id, (task) => ({
     ...task,
     log: [...task.log, ...entries].slice(-logLimit),
+  }));
+}
+
+export function recordCommand(text: string, target: CommandTarget): void {
+  const record = { id: nextCommandId++, text, target, at: Date.now() };
+  update((current) => ({
+    ...current,
+    history: [record, ...current.history].slice(0, historyLimit),
   }));
 }

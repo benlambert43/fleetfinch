@@ -4,6 +4,7 @@ import {
   ExclamationCircleIcon,
   PauseCircleIcon,
 } from "@heroicons/react/20/solid";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useId } from "react";
 
 import {
@@ -11,17 +12,12 @@ import {
   type LogKind,
   type StepState,
   type Task,
-  type TaskState,
   type TaskStep,
+  setActivityOpen,
+  taskStateLabels,
   useActivityTasks,
 } from "@/renderer/activity.ts";
-
-const taskStateLabels: Record<TaskState, string> = {
-  running: "Running",
-  waiting: "Waiting for you",
-  done: "Done",
-  failed: "Failed",
-};
+import { CommandHistory } from "@/renderer/CommandHistory.tsx";
 
 const stepStateLabels: Record<StepState, string> = {
   pending: "not started",
@@ -189,12 +185,27 @@ export function ActivityPane({ open }: { open: boolean }) {
         }`}
     >
       <header
-        className="flex h-11 shrink-0 items-center border-b border-menu-border
-          px-4"
+        className="flex h-11 shrink-0 items-center justify-between gap-3
+          border-b border-menu-border pr-2 pl-4"
       >
         <h2 id={headingId} className="text-headline">
           Activity
         </h2>
+        <button
+          type="button"
+          aria-label="Close activity"
+          title="Close activity"
+          onClick={() => {
+            setActivityOpen(false);
+          }}
+          className="flex size-7 shrink-0 items-center justify-center rounded-md
+            bg-menu-foreground/10 text-menu-foreground transition-colors
+            hover:bg-menu-foreground/20 focus-visible:outline-2
+            focus-visible:outline-offset-2 focus-visible:outline-menu-foreground
+            active:bg-menu-foreground/25"
+        >
+          <XMarkIcon aria-hidden="true" className="size-4" strokeWidth={2} />
+        </button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto p-4">
         {tasks.length === 0 ? (
@@ -205,6 +216,7 @@ export function ActivityPane({ open }: { open: boolean }) {
           tasks.map((task) => <TaskView key={task.id} task={task} />)
         )}
       </div>
+      <CommandHistory />
     </aside>
   );
 }

@@ -45,6 +45,11 @@ export interface BuildToolsStatus {
   sdk: { release: string | null; adjusted: boolean } | null;
 }
 
+export interface BuildToolsSetUpOptions {
+  password?: string | undefined;
+  clean?: BuildToolStep | undefined;
+}
+
 export interface BuildToolsProgress {
   step: BuildToolStep;
   message: string;
