@@ -100,24 +100,14 @@
   --font-sans: "Helvetica Neue", var(--font-inter), sans-serif;
   --font-serif: "Iowan Old Style", var(--font-spectral), serif;
   --font-mono: "Menlo", var(--font-noto-sans-mono), monospace;
-  --font-al-nile: "Al Nile", var(--font-noto-naskh-arabic), serif;
-  --font-apple-sd-gothic-neo:
-    "Apple SD Gothic Neo", var(--font-noto-sans-kr), sans-serif;
-  --font-arial-hebrew: "Arial Hebrew", var(--font-noto-sans-hebrew), sans-serif;
-  --font-damascus: "Damascus", var(--font-noto-sans-arabic), sans-serif;
   --font-din-alternate: "DIN Alternate", var(--font-barlow), sans-serif;
   --font-din-condensed:
     "DIN Condensed", var(--font-saira-extra-condensed), sans-serif;
-  --font-diwan-mishafi:
-    "Diwan Mishafi", "Mishafi", var(--font-amiri-quran), serif;
-  --font-farah: "Farah", var(--font-katibeh), sans-serif;
-  --font-geeza-pro: "Geeza Pro", var(--font-vazirmatn), sans-serif;
   --font-helvetica-neue: "Helvetica Neue", var(--font-inter), sans-serif;
   --font-iowan-old-style: "Iowan Old Style", var(--font-spectral), serif;
   --font-menlo: "Menlo", var(--font-noto-sans-mono), monospace;
   --font-savoye-let: "Savoye LET", var(--font-tangerine), cursive;
   --font-superclarendon: "Superclarendon", var(--font-besley), serif;
-  --font-thonburi: "Thonburi", var(--font-noto-sans-thai-looped), sans-serif;
 }
 
 body {

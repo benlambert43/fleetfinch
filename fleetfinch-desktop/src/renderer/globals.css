@@ -1,40 +1,64 @@
 @import "tailwindcss";
 @import "@fleetfinch/ui/theme.css";
-@import "@fontsource-variable/noto-naskh-arabic";
-@import "@fontsource-variable/noto-sans-kr";
-@import "@fontsource-variable/noto-sans-hebrew";
-@import "@fontsource-variable/noto-sans-arabic";
-@import "@fontsource/barlow/700.css";
-@import "@fontsource/saira-extra-condensed/700.css";
-@import "@fontsource/amiri-quran/400.css";
-@import "@fontsource/katibeh/400.css";
-@import "@fontsource-variable/vazirmatn";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/inter/wght-italic.css";
-@import "@fontsource/spectral/400.css";
-@import "@fontsource/spectral/400-italic.css";
-@import "@fontsource/spectral/700.css";
-@import "@fontsource/spectral/700-italic.css";
-@import "@fontsource-variable/noto-sans-mono";
-@import "@fontsource/tangerine/400.css";
-@import "@fontsource-variable/besley";
-@import "@fontsource-variable/besley/wght-italic.css";
-@import "@fontsource-variable/noto-sans-thai-looped";
+@import "@fontsource/barlow/latin-700.css";
+@import "@fontsource/saira-extra-condensed/latin-700.css";
+@import "@fontsource/spectral/latin-400.css";
+@import "@fontsource/spectral/latin-400-italic.css";
+@import "@fontsource/spectral/latin-700.css";
+@import "@fontsource/spectral/latin-700-italic.css";
+@import "@fontsource/tangerine/latin-400.css";
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-opsz-normal.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-opsz-italic.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/noto-sans-mono/files/noto-sans-mono-latin-wght-normal.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Besley Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("@fontsource-variable/besley/files/besley-latin-wght-normal.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Besley Variable";
+  font-style: italic;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("@fontsource-variable/besley/files/besley-latin-wght-italic.woff2")
+    format("woff2");
+}
 
 :root {
-  --font-noto-naskh-arabic: "Noto Naskh Arabic Variable";
-  --font-noto-sans-kr: "Noto Sans KR Variable";
-  --font-noto-sans-hebrew: "Noto Sans Hebrew Variable";
-  --font-noto-sans-arabic: "Noto Sans Arabic Variable";
   --font-barlow: "Barlow";
   --font-saira-extra-condensed: "Saira Extra Condensed";
-  --font-amiri-quran: "Amiri Quran";
-  --font-katibeh: "Katibeh";
-  --font-vazirmatn: "Vazirmatn Variable";
   --font-inter: "Inter Variable";
   --font-spectral: "Spectral";
   --font-noto-sans-mono: "Noto Sans Mono Variable";
   --font-tangerine: "Tangerine";
   --font-besley: "Besley Variable";
-  --font-noto-sans-thai-looped: "Noto Sans Thai Looped Variable";
 }

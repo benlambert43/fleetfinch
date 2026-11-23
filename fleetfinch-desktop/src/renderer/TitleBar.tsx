@@ -21,7 +21,7 @@ export function TitleBar({
         expanded={sidebarExpanded}
         onExpandedChange={onSidebarExpandedChange}
       />
-      <span className="truncate text-sm font-medium text-muted">{title}</span>
+      <span className="truncate text-[17px] font-medium">{title}</span>
       <WindowControls />
     </div>
   );

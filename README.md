@@ -180,30 +180,22 @@ A component belongs in `fleetfinch-ui` when more than one app shows it, or could
 
 ## Fonts
 
-`fleetfinch-ui/src/theme.css` has a Tailwind font utility for each typeface that [iOS 7 added](https://thomasdenney.co.uk/blog/2013/10/8/new-fonts-in-ios-7/). Each one names the Apple font first, which iOS and macOS have installed, then the closest free Google font, which each app supplies under the variable in the last column. Three of them are also Tailwind's defaults, which its base styles apply to the page and to code: `font-sans` is Helvetica Neue, `font-serif` is Iowan Old Style, and `font-mono` is Menlo.
+`fleetfinch-ui/src/theme.css` has a Tailwind font utility for each Latin-script typeface that [iOS 7 added](https://thomasdenney.co.uk/blog/2013/10/8/new-fonts-in-ios-7/). The apps target English only for now, so the typefaces for Arabic, Hebrew, Korean, and Thai are left out. Each one names the Apple font first, which iOS and macOS have installed, then the closest free Google font, which each app supplies under the variable in the last column. Three of them are also Tailwind's defaults, which its base styles apply to the page and to code: `font-sans` is Helvetica Neue, `font-serif` is Iowan Old Style, and `font-mono` is Menlo.
 
-- **The web app** loads them with `next/font/google` in `app/_lib/fonts.ts`. It preloads Inter, the page font wherever Helvetica Neue is missing; any other font downloads only when a page uses it.
+- **The web app** loads them with `next/font/google` in `app/_lib/fonts.ts`. It preloads Inter, the page font wherever Helvetica Neue is missing; any other font downloads only when a page uses it. `next/font/google` keeps every character set a font has, but the browser downloads only those a page's text needs, so an English page fetches only the Latin files.
 - **The preview image** has no Apple fonts on the server that draws it, so `app/opengraph-image.tsx` draws its text in Inter, from the Latin subset in `fleetfinch-web/assets`, beside the font's license.
-- **The desktop app** bundles them from the Fontsource packages that `src/renderer/globals.css` imports.
+- **The desktop app** bundles only their Latin files, from the Fontsource packages that `src/renderer/globals.css` uses. It imports the Latin stylesheet of each static font, and declares each variable font's Latin file itself, since the variable packages have no stylesheet for a single character set.
 - **`fleetfinch-lite`** sets its page in Helvetica Neue and has a class of the same name for each in `public/styles.css`. It ships no font files: every iOS 9 device has the Apple fonts, and Safari 9 cannot read the WOFF2, variable, and `unicode-range` fonts that Google serves.
 
-| Utility                    | Apple font (styles new in iOS 7)                     | Google font               | Variable                       |
-| -------------------------- | ---------------------------------------------------- | ------------------------- | ------------------------------ |
-| `font-al-nile`             | Al Nile (Regular, Bold)                              | Noto Naskh Arabic         | `--font-noto-naskh-arabic`     |
-| `font-apple-sd-gothic-neo` | Apple SD Gothic Neo (Thin, Light, Regular, SemiBold) | Noto Sans KR              | `--font-noto-sans-kr`          |
-| `font-arial-hebrew`        | Arial Hebrew (Light)                                 | Noto Sans Hebrew          | `--font-noto-sans-hebrew`      |
-| `font-damascus`            | Damascus (Regular, Medium, SemiBold, Bold)           | Noto Sans Arabic          | `--font-noto-sans-arabic`      |
-| `font-din-alternate`       | DIN Alternate (Bold)                                 | Barlow 700                | `--font-barlow`                |
-| `font-din-condensed`       | DIN Condensed (Bold)                                 | Saira Extra Condensed 700 | `--font-saira-extra-condensed` |
-| `font-diwan-mishafi`       | Diwan Mishafi, called Mishafi on macOS               | Amiri Quran               | `--font-amiri-quran`           |
-| `font-farah`               | Farah                                                | Katibeh                   | `--font-katibeh`               |
-| `font-geeza-pro`           | Geeza Pro (Light)                                    | Vazirmatn                 | `--font-vazirmatn`             |
-| `font-helvetica-neue`      | Helvetica Neue (Thin, Thin Italic, Medium Italic)    | Inter                     | `--font-inter`                 |
-| `font-iowan-old-style`     | Iowan Old Style (Roman, Italic, Bold, Bold Italic)   | Spectral 400 and 700      | `--font-spectral`              |
-| `font-menlo`               | Menlo (Regular, Italic, Bold, Bold Italic)           | Noto Sans Mono            | `--font-noto-sans-mono`        |
-| `font-savoye-let`          | Savoye LET                                           | Tangerine 400             | `--font-tangerine`             |
-| `font-superclarendon`      | Superclarendon (Light to Black, with italics)        | Besley                    | `--font-besley`                |
-| `font-thonburi`            | Thonburi (Light)                                     | Noto Sans Thai Looped     | `--font-noto-sans-thai-looped` |
+| Utility                | Apple font (styles new in iOS 7)                   | Google font               | Variable                       |
+| ---------------------- | -------------------------------------------------- | ------------------------- | ------------------------------ |
+| `font-din-alternate`   | DIN Alternate (Bold)                               | Barlow 700                | `--font-barlow`                |
+| `font-din-condensed`   | DIN Condensed (Bold)                               | Saira Extra Condensed 700 | `--font-saira-extra-condensed` |
+| `font-helvetica-neue`  | Helvetica Neue (Thin, Thin Italic, Medium Italic)  | Inter                     | `--font-inter`                 |
+| `font-iowan-old-style` | Iowan Old Style (Roman, Italic, Bold, Bold Italic) | Spectral 400 and 700      | `--font-spectral`              |
+| `font-menlo`           | Menlo (Regular, Italic, Bold, Bold Italic)         | Noto Sans Mono            | `--font-noto-sans-mono`        |
+| `font-savoye-let`      | Savoye LET                                         | Tangerine 400             | `--font-tangerine`             |
+| `font-superclarendon`  | Superclarendon (Light to Black, with italics)      | Besley                    | `--font-besley`                |
 
 Two substitutes fall short of their Apple font. Besley starts at Regular, so Superclarendon Light falls back to it. Noto Sans Mono has no italic, so the browser slants the upright, as Menlo's italic does.
 

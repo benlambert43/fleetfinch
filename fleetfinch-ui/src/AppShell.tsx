@@ -10,7 +10,7 @@ export function AppShell({
   return (
     <main className="flex flex-1 flex-col gap-6 p-5 sm:p-8">
       <header>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-3xl font-light">{title}</h1>
       </header>
       {children}
     </main>
@@ -18,9 +18,5 @@ export function AppShell({
 }
 
 export function SectionHeading({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="text-sm font-semibold tracking-wide text-muted">
-      {children}
-    </h2>
-  );
+  return <h2 className="text-sm font-medium text-muted">{children}</h2>;
 }

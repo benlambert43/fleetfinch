@@ -585,40 +585,12 @@ h2 {
   outline-color: #5a422c;
 }
 
-.font-al-nile {
-  font-family: "Al Nile", "Noto Naskh Arabic", serif;
-}
-
-.font-apple-sd-gothic-neo {
-  font-family: "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-}
-
-.font-arial-hebrew {
-  font-family: "Arial Hebrew", "Noto Sans Hebrew", sans-serif;
-}
-
-.font-damascus {
-  font-family: "Damascus", "Noto Sans Arabic", sans-serif;
-}
-
 .font-din-alternate {
   font-family: "DIN Alternate", "Barlow", sans-serif;
 }
 
 .font-din-condensed {
   font-family: "DIN Condensed", "Saira Extra Condensed", sans-serif;
-}
-
-.font-diwan-mishafi {
-  font-family: "Diwan Mishafi", "Mishafi", "Amiri Quran", serif;
-}
-
-.font-farah {
-  font-family: "Farah", "Katibeh", sans-serif;
-}
-
-.font-geeza-pro {
-  font-family: "Geeza Pro", "Vazirmatn", sans-serif;
 }
 
 .font-helvetica-neue {
@@ -639,8 +611,4 @@ h2 {
 
 .font-superclarendon {
   font-family: "Superclarendon", "Besley", serif;
-}
-
-.font-thonburi {
-  font-family: "Thonburi", "Noto Sans Thai Looped", sans-serif;
 }
