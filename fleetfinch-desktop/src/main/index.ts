@@ -120,6 +120,8 @@ function createWindow(): void {
   const window = new BrowserWindow({
     width: 960,
     height: 720,
+    minWidth: 768,
+    minHeight: 600,
     frame: false,
     backgroundColor: windowBackground(),
     webPreferences: {

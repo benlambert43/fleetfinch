@@ -19,6 +19,8 @@ const links: SidebarLink[] = [
   { href: settingsHref, label: "Settings" },
 ];
 
+const placeholderIds = [1, 2, 3, 4];
+
 function subscribe(listener: () => void): () => void {
   window.addEventListener("hashchange", listener);
   return () => {
@@ -44,10 +46,28 @@ export function App() {
         <Sidebar links={links} current={current} Link="a" />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <Activity mode={visibleOn(homeHref, current)}>
-            <AppShell
-              title={appName}
-              description="A software suite designed to bring modern functionality to iOS 9.3.5 and iOS 9.3.6 devices"
-            />
+            <AppShell title={appName}>
+              <div className="flex flex-1 items-center justify-center">
+                <div
+                  className="grid size-full max-h-[calc(1200px+var(--gap))]
+                    min-h-min max-w-[calc(1200px+var(--gap))]
+                    grid-cols-[repeat(2,minmax(200px,1fr))]
+                    grid-rows-[repeat(2,minmax(200px,1fr))] gap-(--gap)
+                    [--gap:--spacing(4)] sm:[--gap:--spacing(6)]
+                    lg:[--gap:--spacing(8)] xl:size-4/5"
+                >
+                  {placeholderIds.map((id) => (
+                    <div
+                      key={id}
+                      className="flex items-center justify-center rounded-2xl
+                        border-2 border-border p-4 text-center text-muted"
+                    >
+                      Placeholder
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </AppShell>
           </Activity>
           <Activity mode={visibleOn(settingsHref, current)}>
             <AppShell title="Settings">
