@@ -1,6 +1,7 @@
 import { DevicePhoneMobileIcon } from "@heroicons/react/20/solid";
 
-import { EmptyState, PanelBody } from "@/renderer/Panel.tsx";
+import { AddDevice } from "@/renderer/AddDevice.tsx";
+import { EmptyState, PanelActions, PanelBody } from "@/renderer/Panel.tsx";
 
 export function Devices() {
   return (
@@ -15,6 +16,9 @@ export function Devices() {
         title="No devices"
         description="iPhones and iPads connected by USB show up here"
       />
+      <PanelActions>
+        <AddDevice />
+      </PanelActions>
     </PanelBody>
   );
 }

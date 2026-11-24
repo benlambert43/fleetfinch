@@ -1,8 +1,10 @@
 import { XMarkIcon } from "@heroicons/react/20/solid";
-import { WifiIcon } from "@heroicons/react/24/outline";
+import { PlusIcon } from "@heroicons/react/24/outline";
 import { useRef } from "react";
 
-const label = "Add device";
+import { primaryButton } from "@/renderer/Panel.tsx";
+
+const label = "Add Device";
 
 export function AddDevice() {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -10,19 +12,14 @@ export function AddDevice() {
     <>
       <button
         type="button"
-        aria-label={label}
-        title={label}
         aria-haspopup="dialog"
         onClick={() => {
           dialogRef.current?.showModal();
         }}
-        className="-my-0.75 flex size-7 shrink-0 items-center justify-center
-          rounded-md text-muted transition-colors hover:bg-border/50
-          hover:text-foreground focus-visible:outline-2
-          focus-visible:outline-offset-2 focus-visible:outline-foreground
-          active:bg-border/80"
+        className={`flex items-center gap-1.5 ${primaryButton}`}
       >
-        <WifiIcon aria-hidden="true" className="size-4.5" strokeWidth={2} />
+        <PlusIcon aria-hidden="true" className="size-4.5" strokeWidth={2} />
+        {label}
       </button>
       <dialog
         ref={dialogRef}

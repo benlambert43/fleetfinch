@@ -19,7 +19,6 @@ import {
 
 import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
 import { ActivityPane } from "@/renderer/ActivityPane.tsx";
-import { AddDevice } from "@/renderer/AddDevice.tsx";
 import { BuildTools } from "@/renderer/BuildTools.tsx";
 import { Devices } from "@/renderer/Devices.tsx";
 import { Logs } from "@/renderer/Logs.tsx";
@@ -40,9 +39,9 @@ const links: SidebarLink[] = [
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-const panels: { title: string; action?: ReactNode; content: ReactNode }[] = [
+const panels: { title: string; content: ReactNode }[] = [
   { title: "Recent Projects", content: <RecentProjects /> },
-  { title: "Devices", action: <AddDevice />, content: <Devices /> },
+  { title: "Devices", content: <Devices /> },
   { title: "Recent Tasks", content: <RecentTasks /> },
   {
     title: "Computer Info",
@@ -109,10 +108,7 @@ export function App() {
                       className="flex min-h-50 flex-col gap-3 rounded-2xl
                         border-2 border-border p-4"
                     >
-                      <div className="flex items-center gap-1">
-                        <SectionHeading>{panel.title}</SectionHeading>
-                        {panel.action}
-                      </div>
+                      <SectionHeading>{panel.title}</SectionHeading>
                       {panel.content}
                     </section>
                   ))}
