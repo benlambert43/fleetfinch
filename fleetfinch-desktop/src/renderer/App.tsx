@@ -19,6 +19,7 @@ import {
 
 import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
 import { ActivityPane } from "@/renderer/ActivityPane.tsx";
+import { AddDevice } from "@/renderer/AddDevice.tsx";
 import { BuildTools } from "@/renderer/BuildTools.tsx";
 import { Devices } from "@/renderer/Devices.tsx";
 import { Logs } from "@/renderer/Logs.tsx";
@@ -39,9 +40,9 @@ const links: SidebarLink[] = [
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
-const panels: { title: string; content: ReactNode }[] = [
+const panels: { title: string; action?: ReactNode; content: ReactNode }[] = [
   { title: "Recent Projects", content: <RecentProjects /> },
-  { title: "Devices", content: <Devices /> },
+  { title: "Devices", action: <AddDevice />, content: <Devices /> },
   { title: "Recent Tasks", content: <RecentTasks /> },
   {
     title: "Computer Info",
@@ -98,8 +99,9 @@ export function App() {
                     min-h-min max-w-[calc(1200px+var(--gap))]
                     grid-cols-[repeat(2,minmax(200px,1fr))]
                     grid-rows-[repeat(2,minmax(min-content,auto))] gap-(--gap)
-                    [--gap:--spacing(4)] sm:[--gap:--spacing(6)]
-                    lg:[--gap:--spacing(8)] xl:size-19/20"
+                    [--gap:--spacing(4)] [anchor-name:--home-panels]
+                    sm:[--gap:--spacing(6)] lg:[--gap:--spacing(8)]
+                    xl:size-19/20"
                 >
                   {panels.map((panel) => (
                     <section
@@ -107,7 +109,10 @@ export function App() {
                       className="flex min-h-50 flex-col gap-3 rounded-2xl
                         border-2 border-border p-4"
                     >
-                      <SectionHeading>{panel.title}</SectionHeading>
+                      <div className="flex items-center gap-1">
+                        <SectionHeading>{panel.title}</SectionHeading>
+                        {panel.action}
+                      </div>
                       {panel.content}
                     </section>
                   ))}

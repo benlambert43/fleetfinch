@@ -172,9 +172,8 @@ h2 {
   width: 1.5rem;
   height: 1.5rem;
   margin-right: 0.75rem;
-  border: 1px solid #8a705a;
+  border: 1px solid #765e49;
   border-radius: 0.375rem;
-  background-color: #fff8f2;
 }
 
 .checklist-input:checked + .checklist-box {
@@ -203,18 +202,18 @@ h2 {
 
 .install-button[aria-disabled="true"] {
   border-color: #d4bba6;
-  background: #e6d2c1;
-  color: #8a705a;
+  background: rgba(90, 66, 44, 0.1);
+  color: #765e49;
   cursor: default;
 }
 
 .install-button[aria-disabled="true"]:active {
-  background: #e6d2c1;
+  background: rgba(90, 66, 44, 0.1);
 }
 
 @media (hover: hover) {
   .install-button[aria-disabled="true"]:hover {
-    background: #e6d2c1;
+    background: rgba(90, 66, 44, 0.1);
   }
 }
 
@@ -272,7 +271,7 @@ h2 {
 }
 
 .accordion summary:active {
-  background: #e6d2c1;
+  background: rgba(90, 66, 44, 0.1);
 }
 
 .accordion summary::-webkit-details-marker {
@@ -447,13 +446,13 @@ h2 {
 }
 
 .theme-input:not(:checked):active + .theme-face {
-  background: #e6d2c1;
+  background: rgba(90, 66, 44, 0.05);
   color: #5a422c;
 }
 
 @media (hover: hover) {
   .theme-input:not(:checked):hover + .theme-face {
-    background: #e6d2c1;
+    background: rgba(90, 66, 44, 0.05);
     color: #5a422c;
   }
 }
@@ -495,8 +494,7 @@ h2 {
 }
 
 .theme-dark .checklist-box {
-  border-color: #c4a78f;
-  background-color: #4a3524;
+  border-color: #d4bba6;
 }
 
 .theme-dark .checklist-input:focus + .checklist-box {
@@ -522,20 +520,19 @@ h2 {
 
 .theme-dark .install-button[aria-disabled="true"],
 .theme-dark .install-button[aria-disabled="true"]:active {
-  border-color: #8a705a;
-  background: #6b5340;
-  color: #c4a78f;
+  background: rgba(240, 226, 214, 0.1);
+  color: #d4bba6;
 }
 
 @media (hover: hover) {
   .theme-dark .install-button[aria-disabled="true"]:hover {
-    background: #6b5340;
-    color: #c4a78f;
+    background: rgba(240, 226, 214, 0.1);
+    color: #d4bba6;
   }
 }
 
 .theme-dark .accordion summary:active {
-  background: #6b5340;
+  background: rgba(240, 226, 214, 0.1);
 }
 
 .theme-dark .accordion summary::after {
@@ -566,13 +563,13 @@ h2 {
 }
 
 .theme-dark .theme-input:not(:checked):active + .theme-face {
-  background: #6b5340;
+  background: rgba(240, 226, 214, 0.05);
   color: #f0e2d6;
 }
 
 @media (hover: hover) {
   .theme-dark .theme-input:not(:checked):hover + .theme-face {
-    background: #6b5340;
+    background: rgba(240, 226, 214, 0.05);
     color: #f0e2d6;
   }
 }
