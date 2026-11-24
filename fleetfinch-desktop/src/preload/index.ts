@@ -29,6 +29,11 @@ const bridge: Bridge = {
   checkBuildTools: invoke("checkBuildTools"),
   setUpBuildTools: invoke("setUpBuildTools"),
   getLogs: invoke("getLogs"),
+  getDevices: invoke("getDevices"),
+  addDevice: invoke("addDevice"),
+  removeDevice: invoke("removeDevice"),
+  exportBackup: invoke("exportBackup"),
+  restoreBackup: invoke("restoreBackup"),
   onWindowMaximizedChange: (listener) => {
     const forward = (_event: IpcRendererEvent, maximized: boolean) => {
       listener(maximized);

@@ -20,6 +20,8 @@ import {
 import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
 import { ActivityPane } from "@/renderer/ActivityPane.tsx";
 import { BuildTools } from "@/renderer/BuildTools.tsx";
+import { DeviceBackup } from "@/renderer/DeviceBackup.tsx";
+import { DeviceSettings } from "@/renderer/DeviceSettings.tsx";
 import { Devices } from "@/renderer/Devices.tsx";
 import { Logs } from "@/renderer/Logs.tsx";
 import { logsHref } from "@/renderer/logs.ts";
@@ -41,7 +43,14 @@ const links: SidebarLink[] = [
 
 const panels: { title: string; content: ReactNode }[] = [
   { title: "Recent Projects", content: <RecentProjects /> },
-  { title: "Devices", content: <Devices /> },
+  {
+    title: "Devices",
+    content: (
+      <Suspense>
+        <Devices />
+      </Suspense>
+    ),
+  },
   { title: "Recent Tasks", content: <RecentTasks /> },
   {
     title: "Computer Info",
@@ -128,6 +137,16 @@ export function App() {
                 <Suspense>
                   <NativeThemeToggle />
                 </Suspense>
+              </section>
+              <section className="flex flex-col items-start gap-3">
+                <SectionHeading>Devices</SectionHeading>
+                <Suspense>
+                  <DeviceSettings />
+                </Suspense>
+              </section>
+              <section className="flex flex-col items-start gap-3">
+                <SectionHeading>Device Backup</SectionHeading>
+                <DeviceBackup />
               </section>
             </AppShell>
           </Activity>

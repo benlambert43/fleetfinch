@@ -8,6 +8,14 @@ import type {
   BuildToolsSetUpOptions,
   BuildToolsStatus,
 } from "@/buildTools.ts";
+import type {
+  BackupExport,
+  BackupRestore,
+  Device,
+  DeviceConnection,
+  DeviceLogin,
+  DeviceRemoval,
+} from "@/devices.ts";
 import type { LogsSnapshot, LogsUpdate } from "@/logs.ts";
 import type { MenuAction } from "@/menu.ts";
 
@@ -25,6 +33,11 @@ export interface BridgeMethods {
     options?: BuildToolsSetUpOptions,
   ) => Promise<BuildToolsSetup>;
   getLogs: () => Promise<LogsSnapshot>;
+  getDevices: () => Promise<Device[]>;
+  addDevice: (login: DeviceLogin) => Promise<DeviceConnection>;
+  removeDevice: (address: string, revoke: boolean) => Promise<DeviceRemoval>;
+  exportBackup: (password: string) => Promise<BackupExport>;
+  restoreBackup: (password: string) => Promise<BackupRestore>;
 }
 
 export interface Bridge extends BridgeMethods {

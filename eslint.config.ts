@@ -105,6 +105,7 @@ export default defineConfig([
     ],
     settings: { react: { version: reactVersion } },
     rules: {
+      "react/no-unknown-property": ["error", { ignore: ["closedby"] }],
       "no-restricted-globals": [
         "error",
         ...nodeGlobals.map((name) => ({
