@@ -8,8 +8,10 @@ import { useId } from "react";
 import {
   type CommandRecord,
   type CommandTarget,
+  setActivityOpen,
   useCommandHistory,
 } from "@/renderer/activity.ts";
+import { logsHref, showLogs } from "@/renderer/logs.ts";
 
 const targets: Record<
   CommandTarget,
@@ -91,15 +93,19 @@ export function CommandHistory() {
         </ol>
       )}
       <div className="flex justify-end">
-        <button
-          type="button"
-          className="h-7 rounded-md bg-primary px-2.5 text-footnote
-            text-primary-foreground hover:opacity-90 focus-visible:outline-2
-            focus-visible:outline-offset-2
+        <a
+          href={logsHref}
+          onClick={() => {
+            showLogs("computer");
+            setActivityOpen(false);
+          }}
+          className="flex h-7 items-center rounded-md bg-primary px-2.5
+            text-footnote text-primary-foreground hover:opacity-90
+            focus-visible:outline-2 focus-visible:outline-offset-2
             focus-visible:outline-menu-foreground"
         >
           View Logs
-        </button>
+        </a>
       </div>
     </section>
   );

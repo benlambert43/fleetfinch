@@ -1,13 +1,19 @@
 import {
   type BuildToolsCheck,
+  buildToolsCheckSummary,
+  buildToolsFindings,
   type BuildToolsLogLine,
   type BuildToolsProgress,
   type BuildToolsSetup,
   type BuildToolsSetUpOptions,
   type BuildToolsStatus,
   type BuildToolStep,
+  buildToolLabels,
   buildToolSteps,
+  checkBuildToolsTitle,
+  setUpBuildToolsTitle,
 } from "@/buildTools.ts";
+import type { LogGroupState } from "@/logs.ts";
 import {
   lastLines,
   PasswordNeeded,
@@ -40,6 +46,12 @@ import {
   readToolchain,
   verifyToolchain,
 } from "@/main/buildTools/toolchain.ts";
+import {
+  describeError,
+  logAppError,
+  type LogWriter,
+  openLogGroup,
+} from "@/main/logs.ts";
 
 const installers: Record<
   BuildToolStep,
@@ -97,6 +109,11 @@ export interface BuildToolsListener {
   log: (line: BuildToolsLogLine) => void;
 }
 
+interface Outcome {
+  state: Exclude<LogGroupState, "running">;
+  lines: string[];
+}
+
 export async function readBuildTools(): Promise<BuildToolsStatus> {
   const [system, theos, toolchain, sdk] = await Promise.all([
     readSystemPackages(),
@@ -137,11 +154,78 @@ function reporter(step: BuildToolStep, listener: BuildToolsListener): Report {
   };
 }
 
+function failedOutcome(step: BuildToolStep, message: string): Outcome {
+  return { state: "failed", lines: [`${buildToolLabels[step]}: ${message}`] };
+}
+
+function setUpOutcome(result: BuildToolsSetup): Outcome {
+  switch (result.state) {
+    case "ready":
+      return { state: "done", lines: ["Every build tool is ready"] };
+    case "password":
+      return {
+        state: "stopped",
+        lines: [
+          result.message ??
+            `Waiting for a password to install ${result.packages.join(", ")}`,
+        ],
+      };
+    case "failed":
+      return failedOutcome(result.step, result.message);
+  }
+}
+
+function checkOutcome(result: BuildToolsCheck): Outcome {
+  if (result.state !== "checked") {
+    return failedOutcome(result.step, result.message);
+  }
+  return {
+    state: "done",
+    lines: buildToolsCheckSummary(
+      buildToolsFindings(result.updates, result.status),
+    ),
+  };
+}
+
+async function recorded<Result>(
+  title: string,
+  listener: BuildToolsListener,
+  run: (listener: BuildToolsListener, group: LogWriter) => Promise<Result>,
+  outcome: (result: Result) => Outcome,
+): Promise<Result> {
+  const group = openLogGroup("computer", title);
+  const both: BuildToolsListener = {
+    progress: listener.progress,
+    log: (line) => {
+      listener.log(line);
+      group.log(line);
+    },
+  };
+  try {
+    const result = await run(both, group);
+    const { state, lines } = outcome(result);
+    for (const text of lines) {
+      group.log({ kind: state === "failed" ? "error" : "message", text });
+    }
+    group.finish(state, lines.join(" · "));
+    return result;
+  } catch (error) {
+    group.log({ kind: "error", text: describeError(error) });
+    group.finish(
+      "failed",
+      error instanceof Error ? error.message : String(error),
+    );
+    throw error;
+  }
+}
+
 async function setUp(
   listener: BuildToolsListener,
+  group: LogWriter,
   { password, clean }: BuildToolsSetUpOptions,
 ): Promise<BuildToolsSetup> {
   for (const step of buildToolSteps) {
+    group.log({ kind: "step", text: buildToolLabels[step] });
     try {
       await installers[step](reporter(step, listener), {
         password,
@@ -157,7 +241,7 @@ async function setUp(
           status: await readBuildTools(),
         };
       }
-      console.error(`Build tools: the ${step} step failed`, error);
+      logAppError(`Build tools: the ${step} step failed`, error);
       return {
         state: "failed",
         ...stepFailure(step, error),
@@ -172,21 +256,30 @@ export function setUpBuildTools(
   listener: BuildToolsListener,
   options: BuildToolsSetUpOptions = {},
 ): Promise<BuildToolsSetup> {
-  running ??= setUp(listener, options).finally(() => {
+  running ??= recorded(
+    setUpBuildToolsTitle(options.clean),
+    listener,
+    (both, group) => setUp(both, group, options),
+    setUpOutcome,
+  ).finally(() => {
     running = null;
   });
   return running;
 }
 
-async function check(listener: BuildToolsListener): Promise<BuildToolsCheck> {
+async function check(
+  listener: BuildToolsListener,
+  group: LogWriter,
+): Promise<BuildToolsCheck> {
   const updates: BuildToolStep[] = [];
   let unreachable: StepFailure | null = null;
   for (const step of buildToolSteps) {
+    group.log({ kind: "step", text: buildToolLabels[step] });
     const report = reporter(step, listener);
     try {
       await checkers[step].verify(report);
     } catch (error) {
-      console.error(`Build tools: the ${step} install is damaged`, error);
+      logAppError(`Build tools: the ${step} install is damaged`, error);
       return {
         state: "damaged",
         ...stepFailure(step, error),
@@ -198,7 +291,7 @@ async function check(listener: BuildToolsListener): Promise<BuildToolsCheck> {
         updates.push(step);
       }
     } catch (error) {
-      console.error(`Build tools: looking for ${step} updates failed`, error);
+      logAppError(`Build tools: looking for ${step} updates failed`, error);
       unreachable ??= stepFailure(step, error);
     }
   }
@@ -211,7 +304,12 @@ async function check(listener: BuildToolsListener): Promise<BuildToolsCheck> {
 export function checkBuildTools(
   listener: BuildToolsListener,
 ): Promise<BuildToolsCheck> {
-  checking ??= check(listener).finally(() => {
+  checking ??= recorded(
+    checkBuildToolsTitle,
+    listener,
+    check,
+    checkOutcome,
+  ).finally(() => {
     checking = null;
   });
   return checking;

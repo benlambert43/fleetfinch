@@ -13,6 +13,7 @@ import {
   readBuildTools,
   setUpBuildTools,
 } from "@/main/buildTools/setup.ts";
+import { readLogs } from "@/main/logs.ts";
 import { runMenuAction } from "@/main/menu.ts";
 import { getThemePreference, setThemePreference } from "@/main/theme.ts";
 
@@ -61,4 +62,5 @@ export const handlers: Handlers = {
     }
     return setUpBuildTools(listenerFor(window), parsed.data);
   },
+  getLogs: () => Promise.resolve(readLogs()),
 };

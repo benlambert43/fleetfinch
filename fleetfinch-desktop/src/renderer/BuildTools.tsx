@@ -12,8 +12,10 @@ import {
   type BuildToolStep,
   buildToolLabels,
   buildToolSteps,
+  checkBuildToolsTitle,
   type PasswordAccount,
   readyBuildTools,
+  setUpBuildToolsTitle,
   type SystemPackage,
 } from "@/buildTools.ts";
 import {
@@ -142,7 +144,7 @@ export function BuildTools() {
 
   function checkForUpdates() {
     setProblem(null);
-    startBuildToolsTask("Check build tools");
+    startBuildToolsTask(checkBuildToolsTitle);
     startChecking(async () => {
       const result = await window.bridge
         .checkBuildTools()
@@ -180,11 +182,7 @@ export function BuildTools() {
 
   function setUp(options: BuildToolsSetUpOptions = {}) {
     setProblem(null);
-    startBuildToolsTask(
-      options.clean === undefined
-        ? undefined
-        : `Retry ${buildToolLabels[options.clean]}`,
-    );
+    startBuildToolsTask(setUpBuildToolsTitle(options.clean));
     startTransition(async () => {
       const result = await window.bridge
         .setUpBuildTools(options)

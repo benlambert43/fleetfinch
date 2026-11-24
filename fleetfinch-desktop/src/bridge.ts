@@ -8,6 +8,7 @@ import type {
   BuildToolsSetUpOptions,
   BuildToolsStatus,
 } from "@/buildTools.ts";
+import type { LogsSnapshot, LogsUpdate } from "@/logs.ts";
 import type { MenuAction } from "@/menu.ts";
 
 export const windowMaximizedChannel = "windowMaximized";
@@ -23,6 +24,7 @@ export interface BridgeMethods {
   setUpBuildTools: (
     options?: BuildToolsSetUpOptions,
   ) => Promise<BuildToolsSetup>;
+  getLogs: () => Promise<LogsSnapshot>;
 }
 
 export interface Bridge extends BridgeMethods {
@@ -34,6 +36,7 @@ export interface Bridge extends BridgeMethods {
     listener: (progress: BuildToolsProgress) => void,
   ) => () => void;
   onBuildToolsLog: (listener: (line: BuildToolsLogLine) => void) => () => void;
+  onLogs: (listener: (update: LogsUpdate) => void) => () => void;
 }
 
 declare global {

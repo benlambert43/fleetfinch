@@ -5,7 +5,11 @@ import {
   type SidebarLink,
   useSidebarExpanded,
 } from "@fleetfinch/ui";
-import { Cog6ToothIcon, HomeIcon } from "@heroicons/react/24/outline";
+import {
+  Cog6ToothIcon,
+  DocumentTextIcon,
+  HomeIcon,
+} from "@heroicons/react/24/outline";
 import {
   Activity,
   type ReactNode,
@@ -17,6 +21,8 @@ import { setActivityOpen, useActivityOpen } from "@/renderer/activity.ts";
 import { ActivityPane } from "@/renderer/ActivityPane.tsx";
 import { BuildTools } from "@/renderer/BuildTools.tsx";
 import { Devices } from "@/renderer/Devices.tsx";
+import { Logs } from "@/renderer/Logs.tsx";
+import { logsHref } from "@/renderer/logs.ts";
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
 import { RecentProjects } from "@/renderer/RecentProjects.tsx";
 import { RecentTasks } from "@/renderer/RecentTasks.tsx";
@@ -29,6 +35,7 @@ const settingsHref = "#/settings";
 
 const links: SidebarLink[] = [
   { href: homeHref, label: "Home", icon: HomeIcon },
+  { href: logsHref, label: "Logs", icon: DocumentTextIcon },
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
 
@@ -107,6 +114,11 @@ export function App() {
                 </div>
               </div>
             </AppShell>
+          </Activity>
+          <Activity mode={visibleOn(logsHref, current)}>
+            <Suspense>
+              <Logs />
+            </Suspense>
           </Activity>
           <Activity mode={visibleOn(settingsHref, current)}>
             <AppShell title="Settings">

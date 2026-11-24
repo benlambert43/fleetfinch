@@ -17,6 +17,7 @@ export const systemPackages = [
   "ca-certificates",
   "openssh-client",
   "usbmuxd",
+  "libimobiledevice-utils",
 ] as const;
 
 export type SystemPackage = (typeof systemPackages)[number];
@@ -32,6 +33,14 @@ export const buildToolLabels: Record<BuildToolStep, string> = {
   theos: "Theos",
   toolchain: `iOS toolchain and ${buildTarget.sdkVersion} SDK`,
 };
+
+export const checkBuildToolsTitle = "Check build tools";
+
+export function setUpBuildToolsTitle(clean?: BuildToolStep): string {
+  return clean === undefined
+    ? "Set up build tools"
+    : `Retry ${buildToolLabels[clean]}`;
+}
 
 export interface BuildToolsStatus {
   system: { name: SystemPackage; installed: boolean }[];
@@ -105,4 +114,37 @@ export function readyBuildTools(
 
 export function areBuildToolsReady(status: BuildToolsStatus): boolean {
   return Object.values(readyBuildTools(status)).every(Boolean);
+}
+
+export interface BuildToolsFindings {
+  unready: BuildToolStep[];
+  outdated: BuildToolStep[];
+}
+
+export function buildToolsFindings(
+  updates: readonly BuildToolStep[],
+  status: BuildToolsStatus,
+): BuildToolsFindings {
+  const ready = readyBuildTools(status);
+  return {
+    unready: buildToolSteps.filter((step) => !ready[step]),
+    outdated: updates.filter((step) => ready[step]),
+  };
+}
+
+function labels(steps: readonly BuildToolStep[]): string {
+  return steps.map((step) => buildToolLabels[step]).join(", ");
+}
+
+export function buildToolsCheckSummary({
+  unready,
+  outdated,
+}: BuildToolsFindings): string[] {
+  const summary = [
+    ...(unready.length > 0 ? [`Needs setting up: ${labels(unready)}`] : []),
+    ...(outdated.length > 0 ? [`Updates available: ${labels(outdated)}`] : []),
+  ];
+  return summary.length > 0
+    ? summary
+    : ["Every build tool is installed, intact, and up to date"];
 }

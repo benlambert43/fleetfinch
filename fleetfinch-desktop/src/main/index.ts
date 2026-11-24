@@ -17,7 +17,10 @@ import { darkColors, lightColors } from "@fleetfinch/ui/colors";
 import { windowMaximizedChannel } from "@/bridge.ts";
 import { contentSecurityPolicy } from "@/contentSecurityPolicy.ts";
 import { env } from "@/env.ts";
+import type { LogKind } from "@/logs.ts";
+import { stopWatchingDevices, watchDevices } from "@/main/deviceLogs.ts";
 import { handlers } from "@/main/handlers.ts";
+import { logApp, logAppError } from "@/main/logs.ts";
 import { setApplicationMenu } from "@/main/menu.ts";
 import { restoreThemePreference } from "@/main/theme.ts";
 
@@ -68,6 +71,11 @@ const policy = contentSecurityPolicy(env.VITE_API_BASE_URL, {
 
 const grantedPermissions = new Set(["clipboard-sanitized-write", "fullscreen"]);
 
+const consoleKinds: Record<string, LogKind> = {
+  warning: "warning",
+  error: "error",
+};
+
 function isRenderer(url = ""): boolean {
   const target = URL.parse(url);
   return (
@@ -105,7 +113,7 @@ async function serveRendererFile(request: Request): Promise<Response> {
 function openInBrowser(url: string): void {
   if (URL.parse(url)?.protocol === "https:") {
     shell.openExternal(url).catch((error: unknown) => {
-      console.error(`Could not open ${url}`, error);
+      logAppError(`Could not open ${url}`, error);
     });
   }
 }
@@ -114,6 +122,48 @@ function windowBackground(): string {
   return nativeTheme.shouldUseDarkColors
     ? darkColors.background
     : lightColors.background;
+}
+
+function logWindow(window: BrowserWindow): void {
+  const { webContents } = window;
+  webContents.on(
+    "console-message",
+    ({ level, message, sourceId, lineNumber }) => {
+      const kind = consoleKinds[level] ?? "output";
+      const source =
+        kind === "output" || sourceId === ""
+          ? ""
+          : ` (${sourceId}:${String(lineNumber)})`;
+      logApp(kind, `${message.replaceAll("%c", "")}${source}`);
+    },
+  );
+  webContents.on("did-finish-load", () => {
+    logApp("message", "The window loaded");
+  });
+  webContents.on(
+    "did-fail-load",
+    (_event, code, description, url, isMainFrame) => {
+      if (isMainFrame) {
+        logAppError(
+          `The window could not load ${url}: ${description} (${String(code)})`,
+        );
+      }
+    },
+  );
+  webContents.on("preload-error", (_event, _path, error) => {
+    logAppError("The preload script failed", error);
+  });
+  webContents.on("render-process-gone", (_event, { reason, exitCode }) => {
+    logAppError(
+      `The window's process is gone: ${reason}, exit code ${String(exitCode)}`,
+    );
+  });
+  window.on("unresponsive", () => {
+    logApp("warning", "The window stopped responding");
+  });
+  window.on("responsive", () => {
+    logApp("message", "The window is responding again");
+  });
 }
 
 function createWindow(): void {
@@ -134,6 +184,7 @@ function createWindow(): void {
   };
   window.on("maximize", sendMaximized);
   window.on("unmaximize", sendMaximized);
+  logWindow(window);
   void window.loadURL(new URL("/index.html", renderer).href);
 }
 
@@ -171,17 +222,25 @@ async function start(): Promise<void> {
   );
 
   for (const [method, handler] of Object.entries(handlers)) {
-    ipcMain.handle(method, (event, ...args: unknown[]) => {
+    ipcMain.handle(method, async (event, ...args: unknown[]) => {
       const window = BrowserWindow.fromWebContents(event.sender);
       if (!window || !isRenderer(event.senderFrame?.url)) {
-        throw new Error(`Refused ${method} from an unexpected sender`);
+        const refusal = `Refused ${method} from an unexpected sender`;
+        logAppError(refusal);
+        throw new Error(refusal);
       }
-      return handler(window, ...args);
+      try {
+        return await handler(window, ...args);
+      } catch (error) {
+        logAppError(`The window's call to ${method} failed`, error);
+        throw error;
+      }
     });
   }
 
   setApplicationMenu();
   createWindow();
+  watchDevices();
   app.on("activate", showWindow);
   app.on("second-instance", showWindow);
 }
@@ -189,6 +248,20 @@ async function start(): Promise<void> {
 if (devServerUrl) {
   app.setPath("userData", `${app.getPath("userData")} (development)`);
 }
+
+logApp(
+  "message",
+  `Started ${app.getName()} ${app.getVersion()} with Electron ${process.versions.electron}, Chromium ${process.versions.chrome} and Node.js ${process.versions.node} on ${process.platform} ${process.arch}`,
+);
+
+process.on("uncaughtExceptionMonitor", (error, origin) => {
+  logAppError(
+    origin === "unhandledRejection"
+      ? "A promise was rejected and nothing handled it"
+      : "An exception was thrown and nothing caught it",
+    error,
+  );
+});
 
 app.enableSandbox();
 
@@ -216,6 +289,14 @@ app.on("web-contents-created", (_event, contents) => {
     return { action: "deny" };
   });
 });
+
+app.on("child-process-gone", (_event, { type, reason, exitCode }) => {
+  logAppError(
+    `The ${type} process is gone: ${reason}, exit code ${String(exitCode)}`,
+  );
+});
+
+app.on("will-quit", stopWatchingDevices);
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

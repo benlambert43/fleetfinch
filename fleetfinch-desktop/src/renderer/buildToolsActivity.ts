@@ -1,12 +1,13 @@
 import {
   type BuildToolsCheck,
+  buildToolsCheckSummary,
+  buildToolsFindings,
   type BuildToolsLogLine,
   type BuildToolsProgress,
   type BuildToolsSetup,
   type BuildToolStep,
   buildToolLabels,
   buildToolSteps,
-  readyBuildTools,
 } from "@/buildTools.ts";
 import {
   appendTaskLog,
@@ -41,10 +42,6 @@ function settle(
     }
     return position === index ? { ...step, ...change } : step;
   });
-}
-
-function labels(steps: readonly BuildToolStep[]): string {
-  return steps.map((step) => buildToolLabels[step]).join(", ");
 }
 
 function runningStep(task: Task): string {
@@ -91,7 +88,7 @@ function fail(
 window.bridge.onBuildToolsProgress(showProgress);
 window.bridge.onBuildToolsLog(showLog);
 
-export function startBuildToolsTask(title = "Set up build tools"): void {
+export function startBuildToolsTask(title: string): void {
   startTask({
     id: taskId,
     title,
@@ -159,12 +156,10 @@ export function finishBuildToolsCheck(outcome: BuildToolsCheckOutcome): void {
     );
     return;
   }
-  const ready = readyBuildTools(outcome.status);
-  const unready = buildToolSteps.filter((step) => !ready[step]);
-  const outdated = outcome.updates.filter((step) => ready[step]);
+  const found = buildToolsFindings(outcome.updates, outcome.status);
   const findings = new Map<string, string>([
-    ...unready.map((step) => [step, "Needs setting up"] as const),
-    ...outdated.map((step) => [step, "Update available"] as const),
+    ...found.unready.map((step) => [step, "Needs setting up"] as const),
+    ...found.outdated.map((step) => [step, "Update available"] as const),
   ]);
   updateTask(taskId, (task) => ({
     ...task,
@@ -174,15 +169,8 @@ export function finishBuildToolsCheck(outcome: BuildToolsCheckOutcome): void {
       detail: findings.get(step.id) ?? null,
     })),
   }));
-  const summary = [
-    ...(unready.length > 0 ? [`Needs setting up: ${labels(unready)}`] : []),
-    ...(outdated.length > 0 ? [`Updates available: ${labels(outdated)}`] : []),
-  ];
   appendTaskLog(
     taskId,
-    (summary.length > 0
-      ? summary
-      : ["Every build tool is installed, intact, and up to date"]
-    ).map((text) => ({ kind: "message", text })),
+    buildToolsCheckSummary(found).map((text) => ({ kind: "message", text })),
   );
 }

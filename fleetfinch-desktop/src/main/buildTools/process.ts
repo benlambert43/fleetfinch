@@ -70,12 +70,25 @@ function quote(argument: string): string {
     : `'${argument.replaceAll("'", String.raw`'\''`)}'`;
 }
 
-function logLines(stream: Readable, log: Log): void {
+export function commandText(file: string, args: string[]): string {
+  return [file, ...args].map(quote).join(" ");
+}
+
+export function readLines(
+  stream: Readable,
+  onLine: (text: string) => void,
+): void {
   createInterface({ input: stream, crlfDelay: Infinity }).on("line", (line) => {
     const text = stripVTControlCharacters(line).trimEnd();
     if (text !== "") {
-      log({ kind: "output", text });
+      onLine(text);
     }
+  });
+}
+
+function logLines(stream: Readable, log: Log): void {
+  readLines(stream, (text) => {
+    log({ kind: "output", text });
   });
 }
 
@@ -91,7 +104,7 @@ export function runProcess(
   }: ProcessOptions = {},
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
-    log?.({ kind: "command", text: [file, ...args].map(quote).join(" ") });
+    log?.({ kind: "command", text: commandText(file, args) });
     const child = spawn(file, args, {
       env,
       stdio: ["pipe", "pipe", "pipe"],
