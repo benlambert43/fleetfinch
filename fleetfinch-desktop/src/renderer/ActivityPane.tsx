@@ -18,6 +18,7 @@ import {
   useActivityTasks,
 } from "@/renderer/activity.ts";
 import { CommandHistory } from "@/renderer/CommandHistory.tsx";
+import { logsHref, showLogs } from "@/renderer/logs.ts";
 
 const stepStateLabels: Record<StepState, string> = {
   pending: "not started",
@@ -126,18 +127,33 @@ function TaskView({ task }: { task: Task }) {
   const logHeadingId = useId();
   return (
     <article aria-labelledby={headingId} className="flex flex-1 flex-col gap-4">
-      <header className="flex items-baseline justify-between gap-3">
-        <h3 id={headingId} className="text-headline">
-          {task.title}
-        </h3>
-        <p
-          role="status"
-          className={`shrink-0 text-footnote ${
-            task.state === "failed" ? "text-danger" : "text-menu-muted"
-          }`}
+      <header className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h3 id={headingId} className="text-headline">
+            {task.title}
+          </h3>
+          <p
+            role="status"
+            className={`text-footnote ${
+              task.state === "failed" ? "text-danger" : "text-menu-muted"
+            }`}
+          >
+            {taskStateLabels[task.state]}
+          </p>
+        </div>
+        <a
+          href={logsHref}
+          onClick={() => {
+            showLogs("computer");
+            setActivityOpen(false);
+          }}
+          className="flex h-7 shrink-0 items-center rounded-md bg-secondary
+            px-2.5 text-footnote text-secondary-foreground hover:opacity-90
+            focus-visible:outline-2 focus-visible:outline-offset-2
+            focus-visible:outline-menu-foreground"
         >
-          {taskStateLabels[task.state]}
-        </p>
+          View Logs
+        </a>
       </header>
       <ol aria-label="Steps" className="flex flex-col gap-3">
         {task.steps.map((step) => (

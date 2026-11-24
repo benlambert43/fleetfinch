@@ -22,9 +22,9 @@ import {
   PanelBody,
   PanelSection,
   SectionEmptyState,
-  secondaryButton,
   StatusList,
   StatusRow,
+  primaryButton,
 } from "@/renderer/Panel.tsx";
 
 function TaskIcon({ state }: { state: TaskState }) {
@@ -124,7 +124,7 @@ export function RecentTasks() {
           onClick={() => {
             setActivityOpen(!open);
           }}
-          className={secondaryButton}
+          className={primaryButton}
         >
           {open ? "Hide Activity" : "Show Activity"}
         </button>
