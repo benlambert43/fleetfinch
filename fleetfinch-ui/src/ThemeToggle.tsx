@@ -66,11 +66,12 @@ export function ThemeToggle({
           title={showLabels ? undefined : option.label}
           className={`cursor-pointer text-muted
           not-has-checked:hover:bg-foreground/5
-          not-has-checked:hover:text-foreground has-checked:bg-foreground
-          has-checked:text-background has-focus-visible:outline-2
+          not-has-checked:hover:text-foreground has-checked:bg-secondary
+          has-checked:text-secondary-foreground has-focus-visible:outline-2
           has-focus-visible:-outline-offset-4
           has-focus-visible:outline-foreground
-          has-checked:has-focus-visible:outline-background ${style.option}`}
+          has-checked:has-focus-visible:outline-secondary-foreground
+          ${style.option}`}
         >
           <input
             type="radio"

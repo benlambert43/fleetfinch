@@ -5,6 +5,11 @@ export const primaryButton = `h-9 rounded-lg bg-primary px-3 text-subheadline
   focus-visible:outline-offset-2 focus-visible:outline-foreground
   disabled:opacity-60`;
 
+export const secondaryButton = `h-9 rounded-lg bg-secondary px-3
+  text-subheadline text-secondary-foreground hover:opacity-90
+  focus-visible:outline-2 focus-visible:outline-offset-2
+  focus-visible:outline-foreground disabled:opacity-60`;
+
 export function PanelBody({ children }: { children: ReactNode }) {
   return <div className="flex flex-1 flex-col gap-4">{children}</div>;
 }

@@ -99,8 +99,8 @@ export function CommandHistory() {
             showLogs("computer");
             setActivityOpen(false);
           }}
-          className="flex h-7 items-center rounded-md bg-primary px-2.5
-            text-footnote text-primary-foreground hover:opacity-90
+          className="flex h-7 items-center rounded-md bg-secondary px-2.5
+            text-footnote text-secondary-foreground hover:opacity-90
             focus-visible:outline-2 focus-visible:outline-offset-2
             focus-visible:outline-menu-foreground"
         >

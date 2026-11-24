@@ -9,11 +9,11 @@ export function Prerequisites() {
           href="http://carbon.sep.lol/"
           target="_blank"
           className="inline-flex items-center gap-1 rounded-lg border
-            border-accent-border bg-accent-soft px-4 py-2.75
-            text-accent-soft-foreground hover:bg-accent
-            hover:text-accent-foreground focus-visible:outline-2
+            border-primary-border bg-primary-soft px-4 py-2.75
+            text-primary-soft-foreground hover:bg-primary
+            hover:text-primary-foreground focus-visible:outline-2
             focus-visible:outline-offset-2 focus-visible:outline-foreground
-            active:bg-accent active:text-accent-foreground"
+            active:bg-primary active:text-primary-foreground"
         >
           Carbon
           <ExternalLinkIcon className="size-4" />

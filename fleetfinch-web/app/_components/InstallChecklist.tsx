@@ -126,8 +126,8 @@ export function InstallChecklist() {
                     toggle(id, event.currentTarget.checked);
                   }}
                   className="peer size-6 cursor-pointer appearance-none
-                    rounded-md border border-muted checked:border-accent
-                    checked:bg-accent focus-visible:outline-2
+                    rounded-md border border-muted checked:border-primary
+                    checked:bg-primary focus-visible:outline-2
                     focus-visible:outline-offset-2
                     focus-visible:outline-foreground"
                 />
@@ -140,7 +140,7 @@ export function InstallChecklist() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   className="pointer-events-none absolute inset-1 hidden
-                    text-accent-foreground peer-checked:block"
+                    text-primary-foreground peer-checked:block"
                 >
                   <path d="M5 12.5l4.5 4.5L19 7.5" />
                 </svg>
@@ -155,13 +155,13 @@ export function InstallChecklist() {
         aria-disabled={!ready}
         aria-describedby={errorId}
         onClick={install}
-        className="mt-4 rounded-lg border border-accent-border bg-accent-soft
-          px-4 py-2.75 text-accent-soft-foreground
-          not-aria-disabled:hover:bg-accent
-          not-aria-disabled:hover:text-accent-foreground focus-visible:outline-2
-          focus-visible:outline-offset-2 focus-visible:outline-foreground
-          not-aria-disabled:active:bg-accent
-          not-aria-disabled:active:text-accent-foreground
+        className="mt-4 rounded-lg border border-primary-border bg-primary-soft
+          px-4 py-2.75 text-primary-soft-foreground
+          not-aria-disabled:hover:bg-primary
+          not-aria-disabled:hover:text-primary-foreground
+          focus-visible:outline-2 focus-visible:outline-offset-2
+          focus-visible:outline-foreground not-aria-disabled:active:bg-primary
+          not-aria-disabled:active:text-primary-foreground
           aria-disabled:cursor-default aria-disabled:border-border
           aria-disabled:bg-foreground/10 aria-disabled:text-muted"
       >

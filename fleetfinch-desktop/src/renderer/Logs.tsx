@@ -36,7 +36,7 @@ import {
   useLogs,
   useLogSource,
 } from "@/renderer/logs.ts";
-import { StatusRow } from "@/renderer/Panel.tsx";
+import { secondaryButton, StatusRow } from "@/renderer/Panel.tsx";
 
 const descriptions: Record<LogSource, string> = {
   app: "What FleetFinch Developer reports about itself: its window's console, and anything that goes wrong in the window or the main process",
@@ -73,11 +73,6 @@ const copiedMs = 2000;
 const inputStyle = `h-9 w-48 min-w-0 rounded-lg border-2 border-border
   bg-background px-2 text-subheadline focus-visible:outline-2
   focus-visible:outline-offset-2 focus-visible:outline-foreground`;
-
-const secondaryButton = `h-9 rounded-lg border-2 border-border px-3
-  text-subheadline hover:bg-foreground/5 focus-visible:outline-2
-  focus-visible:outline-offset-2 focus-visible:outline-foreground
-  disabled:opacity-60`;
 
 function lineCount(count: number): string {
   return `${numberFormat.format(count)} ${count === 1 ? "line" : "lines"}`;
@@ -127,7 +122,7 @@ function StateIcon({ state }: { state: LogGroupState }) {
       return (
         <PauseCircleIcon
           aria-hidden="true"
-          className="size-5 shrink-0 text-accent"
+          className="size-5 shrink-0 text-accent-border"
         />
       );
     case "failed":
@@ -484,8 +479,9 @@ export function Logs() {
                 not-aria-selected:hover:bg-foreground/5
                 not-aria-selected:hover:text-foreground focus-visible:outline-2
                 focus-visible:-outline-offset-4 focus-visible:outline-foreground
-                aria-selected:bg-foreground aria-selected:text-background
-                aria-selected:focus-visible:outline-background"
+                aria-selected:bg-secondary
+                aria-selected:text-secondary-foreground
+                aria-selected:focus-visible:outline-secondary-foreground"
             >
               {logSourceLabels[source]}
             </button>

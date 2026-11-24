@@ -56,8 +56,8 @@ function WindowButton({
         focus-visible:outline-2 focus-visible:outline-offset-2
         focus-visible:outline-foreground ${
           danger
-            ? `hover:bg-accent hover:text-accent-foreground
-              active:bg-accent-soft`
+            ? `hover:bg-primary hover:text-primary-foreground
+              active:bg-primary-soft active:text-primary-soft-foreground`
             : "hover:bg-border/70 active:bg-border"
         }`}
     >

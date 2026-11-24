@@ -60,7 +60,7 @@ function StepIcon({ state }: { state: StepState }) {
       return (
         <PauseCircleIcon
           aria-hidden="true"
-          className="size-5 shrink-0 text-accent"
+          className="size-5 shrink-0 text-accent-border"
         />
       );
     case "done":

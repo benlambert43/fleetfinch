@@ -27,6 +27,7 @@ import {
   PanelActions,
   PanelBody,
   primaryButton,
+  secondaryButton,
   StatusList,
   StatusRow,
 } from "@/renderer/Panel.tsx";
@@ -370,10 +371,7 @@ export function BuildTools() {
                 onClick={() => {
                   setRequest(null);
                 }}
-                className="h-9 rounded-lg border-2 border-border px-3
-                  text-subheadline hover:bg-foreground/5 focus-visible:outline-2
-                  focus-visible:outline-offset-2
-                  focus-visible:outline-foreground disabled:opacity-60"
+                className={secondaryButton}
               >
                 Cancel
               </button>

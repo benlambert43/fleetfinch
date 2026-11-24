@@ -14,18 +14,25 @@
 
 @theme {
   --color-*: initial;
+  --color-slate-light: #ecedf0;
+  --color-slate-mid: #bdc0cb;
+  --color-slate-deep: #5f6781;
+  --color-slate-dark: #434c6b;
+  --color-slate-night: #222636;
   --color-sand-light: #f0e2d6;
   --color-sand-mid: #d4bba6;
   --color-sand-deep: #765e49;
   --color-sand-dark: #5a422c;
-  --color-blue-light: #c6edf6;
-  --color-blue-mid: #47cfea;
-  --color-blue-deep: #4e97a7;
-  --color-blue-dark: #434c6b;
   --color-orange-light: #ffdbbd;
+  --color-orange-bright: #fea865;
   --color-orange-mid: #fa880d;
+  --color-orange-deep: #924d04;
   --color-orange-dark: #5b2700;
-  --color-red-light: #ffb3a6;
+  --color-cyan-light: #c6edf6;
+  --color-cyan-mid: #47cfea;
+  --color-cyan-deep: #1e6472;
+  --color-cyan-dark: #0d3841;
+  --color-red-light: #ffc4b8;
   --color-red-deep: #a3291a;
   --text-headline: 1.0625rem;
   --text-headline--line-height: 1.375rem;
@@ -40,21 +47,26 @@
 
 :root {
   color-scheme: light;
-  --background: var(--color-sand-light);
+  --background: var(--color-slate-light);
   --chrome: color-mix(in oklab, var(--background) 98%, black);
-  --foreground: var(--color-sand-dark);
-  --muted: var(--color-sand-deep);
-  --border: var(--color-sand-mid);
-  --primary: var(--color-blue-mid);
-  --primary-foreground: var(--color-blue-dark);
-  --primary-soft: var(--color-blue-light);
-  --primary-soft-foreground: var(--color-blue-dark);
-  --primary-border: var(--color-blue-deep);
-  --accent: var(--color-orange-mid);
-  --accent-foreground: var(--color-orange-dark);
-  --accent-soft: var(--color-orange-light);
-  --accent-soft-foreground: var(--color-orange-dark);
-  --accent-border: var(--color-orange-mid);
+  --foreground: var(--color-slate-dark);
+  --muted: var(--color-slate-deep);
+  --border: var(--color-slate-mid);
+  --primary: var(--color-orange-deep);
+  --primary-foreground: var(--color-slate-light);
+  --primary-soft: var(--color-orange-light);
+  --primary-soft-foreground: var(--color-orange-dark);
+  --primary-border: var(--color-orange-deep);
+  --secondary: var(--color-cyan-deep);
+  --secondary-foreground: var(--color-slate-light);
+  --secondary-soft: var(--color-cyan-light);
+  --secondary-soft-foreground: var(--color-cyan-dark);
+  --secondary-border: var(--color-cyan-deep);
+  --accent: var(--color-sand-mid);
+  --accent-foreground: var(--color-sand-dark);
+  --accent-soft: var(--color-sand-light);
+  --accent-soft-foreground: var(--color-sand-dark);
+  --accent-border: var(--color-sand-deep);
   --danger: var(--color-red-deep);
   --menu: var(--chrome);
   --menu-foreground: var(--foreground);
@@ -63,25 +75,25 @@
 
   @variant dark {
     color-scheme: dark;
-    --background: var(--color-sand-dark);
+    --background: var(--color-slate-night);
     --chrome: color-mix(in oklab, var(--background) 91%, black);
-    --foreground: var(--color-sand-light);
-    --muted: var(--color-sand-mid);
-    --primary-soft: var(--color-blue-dark);
-    --primary-soft-foreground: var(--color-blue-light);
-    --primary-border: var(--color-blue-mid);
-    --accent-soft: var(--color-orange-dark);
-    --accent-soft-foreground: var(--color-orange-light);
+    --foreground: var(--color-slate-light);
+    --muted: var(--color-slate-mid);
+    --border: var(--color-slate-deep);
+    --primary: var(--color-orange-bright);
+    --primary-foreground: var(--color-slate-night);
+    --primary-soft: var(--color-orange-dark);
+    --primary-soft-foreground: var(--color-orange-light);
+    --primary-border: var(--color-orange-mid);
+    --secondary: var(--color-cyan-mid);
+    --secondary-foreground: var(--color-slate-night);
+    --secondary-soft: var(--color-cyan-dark);
+    --secondary-soft-foreground: var(--color-cyan-light);
+    --secondary-border: var(--color-cyan-mid);
+    --accent-soft: var(--color-sand-dark);
+    --accent-soft-foreground: var(--color-sand-light);
+    --accent-border: var(--color-sand-mid);
     --danger: var(--color-red-light);
-    --menu-saturation: 0.35;
-    --menu: oklch(from var(--chrome) l calc(c * var(--menu-saturation)) h);
-    --menu-foreground: oklch(
-      from var(--foreground) l calc(c * var(--menu-saturation)) h
-    );
-    --menu-muted: oklch(from var(--muted) l calc(c * var(--menu-saturation)) h);
-    --menu-border: oklch(
-      from var(--border) l calc(c * var(--menu-saturation)) h
-    );
   }
 }
 
@@ -96,6 +108,11 @@
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-foreground: var(--primary-soft-foreground);
   --color-primary-border: var(--primary-border);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-soft: var(--secondary-soft);
+  --color-secondary-soft-foreground: var(--secondary-soft-foreground);
+  --color-secondary-border: var(--secondary-border);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-soft: var(--accent-soft);

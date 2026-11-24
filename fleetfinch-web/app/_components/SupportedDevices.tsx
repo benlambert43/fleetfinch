@@ -57,12 +57,12 @@ export function SupportedDevices() {
             <a
               href={device.article}
               aria-label={`${device.name} on Wikipedia`}
-              className="my-1 shrink-0 rounded-lg border border-primary-border
-                bg-primary-soft p-2.75 text-primary-soft-foreground
-                hover:bg-primary hover:text-primary-foreground
+              className="my-1 shrink-0 rounded-lg border border-secondary-border
+                bg-secondary-soft p-2.75 text-secondary-soft-foreground
+                hover:bg-secondary hover:text-secondary-foreground
                 focus-visible:outline-2 focus-visible:outline-offset-2
-                focus-visible:outline-foreground active:bg-primary
-                active:text-primary-foreground"
+                focus-visible:outline-foreground active:bg-secondary
+                active:text-secondary-foreground"
             >
               <ExternalLinkIcon className="size-5" />
             </a>

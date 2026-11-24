@@ -21,8 +21,8 @@ import {
   PanelActions,
   PanelBody,
   PanelSection,
-  primaryButton,
   SectionEmptyState,
+  secondaryButton,
   StatusList,
   StatusRow,
 } from "@/renderer/Panel.tsx";
@@ -40,7 +40,7 @@ function TaskIcon({ state }: { state: TaskState }) {
       return (
         <PauseCircleIcon
           aria-hidden="true"
-          className="size-5 shrink-0 text-accent"
+          className="size-5 shrink-0 text-accent-border"
         />
       );
     case "done":
@@ -124,7 +124,7 @@ export function RecentTasks() {
           onClick={() => {
             setActivityOpen(!open);
           }}
-          className={primaryButton}
+          className={secondaryButton}
         >
           {open ? "Hide Activity" : "Show Activity"}
         </button>
