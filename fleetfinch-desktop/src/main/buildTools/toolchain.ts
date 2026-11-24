@@ -5,7 +5,10 @@ import {
   installReleaseArchive,
   removeArchiveInstall,
 } from "@/main/buildTools/archive.ts";
-import { latestReleaseAsset } from "@/main/buildTools/github.ts";
+import {
+  isNewerRelease,
+  latestReleaseAsset,
+} from "@/main/buildTools/github.ts";
 import {
   forgetRelease,
   iosToolchainFolder,
@@ -15,6 +18,7 @@ import {
   toolchainParentFolder,
 } from "@/main/buildTools/paths.ts";
 import {
+  type Log,
   type Report,
   runProcess,
   StepError,
@@ -27,26 +31,44 @@ const architectures: Partial<Record<string, string>> = {
 };
 const insideArchive = path.join("linux", "iphone");
 const compiler = path.join("bin", "clang");
+const requiredTools = [
+  "clang",
+  "clang++",
+  "ld",
+  "lipo",
+  "strip",
+  "codesign_allocate",
+  "libtool",
+  "dsymutil",
+  "ldid",
+];
 
 function tool(name: string): string {
   return path.join(iosToolchainFolder(), "bin", name);
 }
 
-async function printed(file: string, args: string[]): Promise<string | null> {
+async function printed(
+  file: string,
+  args: string[],
+  log?: Log,
+): Promise<string | null> {
   const { code, output } = await runProcess(file, args, {
     timeoutMs: 10_000,
+    log,
   }).catch(() => ({ code: null, output: "" }));
   return code === 0 ? output : null;
 }
 
-export async function readToolchain(): Promise<BuildToolsStatus["toolchain"]> {
+export async function readToolchain(
+  log?: Log,
+): Promise<BuildToolsStatus["toolchain"]> {
   if (!(await isExecutable(tool("clang")))) {
     return null;
   }
-  const [clang, linker, ldid, releases] = await Promise.all([
-    printed(tool("clang"), ["--version"]),
-    printed(tool("ld"), ["-v"]),
-    isExecutable(tool("ldid")),
+  const clang = await printed(tool("clang"), ["--version"], log);
+  const linker = await printed(tool("ld"), ["-v"], log);
+  const [executable, releases] = await Promise.all([
+    Promise.all(requiredTools.map((name) => isExecutable(tool(name)))),
     readReleases(),
   ]);
   return {
@@ -55,8 +77,35 @@ export async function readToolchain(): Promise<BuildToolsStatus["toolchain"]> {
     armv7: new RegExp(
       String.raw`support archs:.*\b${buildTarget.architecture}\b`,
     ).test(linker ?? ""),
-    ldid,
+    missing: requiredTools.filter((_name, index) => !executable[index]),
   };
+}
+
+export async function verifyToolchain(report: Report): Promise<void> {
+  report.progress(
+    `Checking that the iOS toolchain runs and links ${buildTarget.architecture}`,
+  );
+  await readToolchain(report.log);
+}
+
+function toolchainArchive(): string {
+  const architecture = architectures[process.arch];
+  if (!architecture) {
+    throw new StepError(
+      `${toolchainRepository} publishes no iOS toolchain for ${process.arch} computers.`,
+    );
+  }
+  return `iOSToolchain-${architecture}.tar.xz`;
+}
+
+export async function hasToolchainUpdate(report: Report): Promise<boolean> {
+  if (!(await isExecutable(tool("clang")))) {
+    return false;
+  }
+  const archive = toolchainArchive();
+  report.progress("Looking for a newer stable iOS toolchain");
+  const asset = await latestReleaseAsset(toolchainRepository, archive);
+  return isNewerRelease(report, asset, (await readReleases()).toolchain);
 }
 
 export async function cleanToolchain(report: Report): Promise<void> {
@@ -66,23 +115,15 @@ export async function cleanToolchain(report: Report): Promise<void> {
 }
 
 export async function installToolchain(report: Report): Promise<void> {
-  const architecture = architectures[process.arch];
-  if (!architecture) {
-    throw new StepError(
-      `${toolchainRepository} publishes no iOS toolchain for ${process.arch} computers.`,
-    );
-  }
+  const archive = toolchainArchive();
   report.progress("Looking for the newest stable iOS toolchain");
-  const asset = await latestReleaseAsset(
-    toolchainRepository,
-    `iOSToolchain-${architecture}.tar.xz`,
-  );
+  const asset = await latestReleaseAsset(toolchainRepository, archive);
   const current = await readToolchain();
   if (
     current?.release === asset.release &&
     current.clang !== null &&
     current.armv7 &&
-    current.ldid
+    current.missing.length === 0
   ) {
     report.progress(
       `${asset.release} is the newest release and is installed`,
@@ -113,7 +154,9 @@ export async function installToolchain(report: Report): Promise<void> {
       `The linker in ${asset.release} cannot link ${buildTarget.architecture}, which iOS ${buildTarget.sdkVersion} devices need.`,
     );
   }
-  if (!installed.ldid) {
-    throw new StepError(`${asset.release} has no ldid.`);
+  if (installed.missing.length > 0) {
+    throw new StepError(
+      `${asset.release} has no ${installed.missing.join(", ")}.`,
+    );
   }
 }

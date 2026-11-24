@@ -1,10 +1,12 @@
 import {
+  type BuildToolsCheck,
   type BuildToolsLogLine,
   type BuildToolsProgress,
   type BuildToolsSetup,
   type BuildToolStep,
   buildToolLabels,
   buildToolSteps,
+  readyBuildTools,
 } from "@/buildTools.ts";
 import {
   appendTaskLog,
@@ -17,6 +19,9 @@ import {
 
 export type BuildToolsOutcome =
   BuildToolsSetup | { state: "error"; message: string };
+
+export type BuildToolsCheckOutcome =
+  BuildToolsCheck | { state: "error"; message: string };
 
 const taskId = "build-tools";
 
@@ -36,6 +41,10 @@ function settle(
     }
     return position === index ? { ...step, ...change } : step;
   });
+}
+
+function labels(steps: readonly BuildToolStep[]): string {
+  return steps.map((step) => buildToolLabels[step]).join(", ");
 }
 
 function runningStep(task: Task): string {
@@ -135,4 +144,45 @@ export function finishBuildToolsTask(outcome: BuildToolsOutcome): void {
     case "error":
       fail(null, outcome.message, outcome.message);
   }
+}
+
+export function finishBuildToolsCheck(outcome: BuildToolsCheckOutcome): void {
+  if (outcome.state === "error") {
+    fail(null, outcome.message, outcome.message);
+    return;
+  }
+  if (outcome.state !== "checked") {
+    fail(
+      outcome.step,
+      outcome.message,
+      `${buildToolLabels[outcome.step]}: ${outcome.message}`,
+    );
+    return;
+  }
+  const ready = readyBuildTools(outcome.status);
+  const unready = buildToolSteps.filter((step) => !ready[step]);
+  const outdated = outcome.updates.filter((step) => ready[step]);
+  const findings = new Map<string, string>([
+    ...unready.map((step) => [step, "Needs setting up"] as const),
+    ...outdated.map((step) => [step, "Update available"] as const),
+  ]);
+  updateTask(taskId, (task) => ({
+    ...task,
+    state: "done",
+    steps: task.steps.map((step) => ({
+      ...finished(step),
+      detail: findings.get(step.id) ?? null,
+    })),
+  }));
+  const summary = [
+    ...(unready.length > 0 ? [`Needs setting up: ${labels(unready)}`] : []),
+    ...(outdated.length > 0 ? [`Updates available: ${labels(outdated)}`] : []),
+  ];
+  appendTaskLog(
+    taskId,
+    (summary.length > 0
+      ? summary
+      : ["Every build tool is installed, intact, and up to date"]
+    ).map((text) => ({ kind: "message", text })),
+  );
 }

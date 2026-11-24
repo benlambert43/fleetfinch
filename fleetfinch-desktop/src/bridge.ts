@@ -1,6 +1,7 @@
 import type { ThemePreference } from "@fleetfinch/ui/theme-preference";
 
 import type {
+  BuildToolsCheck,
   BuildToolsLogLine,
   BuildToolsProgress,
   BuildToolsSetup,
@@ -18,6 +19,7 @@ export interface BridgeMethods {
   isWindowMaximized: () => Promise<boolean>;
   runMenuAction: (action: MenuAction) => Promise<void>;
   getBuildTools: () => Promise<BuildToolsStatus>;
+  checkBuildTools: () => Promise<BuildToolsCheck>;
   setUpBuildTools: (
     options?: BuildToolsSetUpOptions,
   ) => Promise<BuildToolsSetup>;

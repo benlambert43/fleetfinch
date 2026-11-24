@@ -6,6 +6,7 @@ import {
   buildToolsFolder,
   exists,
   iosToolchainFolder,
+  isExecutable,
   sdkFolder,
   theosFolder,
 } from "@/main/buildTools/paths.ts";
@@ -33,6 +34,10 @@ async function isTheos(folder: string): Promise<boolean> {
   return exists(path.join(folder, "makefiles"));
 }
 
+async function canCheck(folder: string): Promise<boolean> {
+  return (await isTheos(folder)) && (await isExecutable(gitFile));
+}
+
 export async function readTheos(): Promise<BuildToolsStatus["theos"]> {
   const folder = theosFolder();
   if (!(await isTheos(folder))) {
@@ -45,6 +50,76 @@ export async function readTheos(): Promise<BuildToolsStatus["theos"]> {
   ).catch(() => ({ code: null, output: "" }));
   const match = code === 0 ? /^(\S+) (\S+)$/.exec(output.trim()) : null;
   return { commit: match?.[1] ?? null, date: match?.[2] ?? null };
+}
+
+export async function verifyTheos(report: Report): Promise<void> {
+  const folder = theosFolder();
+  if (!(await canCheck(folder))) {
+    return;
+  }
+  report.progress("Checking Theos's git repository");
+  await git(
+    ["-C", folder, "fsck", "--no-progress"],
+    `Theos's git repository in ${folder} is damaged.`,
+    report.log,
+  );
+  report.progress("Checking Theos's files against its newest commit");
+  const changed = await git(
+    [
+      "-C",
+      folder,
+      "status",
+      "--porcelain",
+      "--untracked-files=no",
+      "--ignore-submodules=all",
+    ],
+    `Theos's files in ${folder} could not be checked.`,
+    report.log,
+  );
+  if (changed.trim() !== "") {
+    throw new StepError(`Theos in ${folder} has changed files.`, changed);
+  }
+  report.progress("Checking Theos's submodules");
+  const submodules = await git(
+    ["-C", folder, "submodule", "status", "--recursive"],
+    `Theos's submodules in ${folder} could not be checked.`,
+    report.log,
+  );
+  const wrong = submodules
+    .split("\n")
+    .filter((line) => /^[-+U]/.test(line))
+    .map((line) => line.slice(1).split(" ")[1] ?? line);
+  if (wrong.length > 0) {
+    const subject = wrong.length === 1 ? "submodule is" : "submodules are";
+    throw new StepError(
+      `Theos's ${wrong.join(", ")} ${subject} missing or at the wrong commit.`,
+      submodules,
+    );
+  }
+}
+
+export async function hasTheosUpdate(report: Report): Promise<boolean> {
+  const folder = theosFolder();
+  if (!(await canCheck(folder))) {
+    return false;
+  }
+  report.progress("Looking for new Theos commits");
+  await git(
+    ["-C", folder, "fetch", "--quiet"],
+    `Theos in ${folder} could not fetch its newest commits.`,
+    report.log,
+  );
+  const behind = await git(
+    ["-C", folder, "rev-list", "--count", "HEAD..@{upstream}"],
+    `Theos in ${folder} follows no branch to compare its commits with.`,
+    report.log,
+  );
+  const newer = Number(behind.trim()) !== 0;
+  report.progress(
+    newer ? "Theos has newer commits" : "Theos is on its newest commit",
+    1,
+  );
+  return newer;
 }
 
 async function updateTheos(folder: string, report: Report): Promise<void> {

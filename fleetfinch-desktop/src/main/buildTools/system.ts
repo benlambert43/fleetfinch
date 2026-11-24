@@ -27,6 +27,7 @@ const shellFile = "/bin/sh";
 const adminGroups = new Set(["sudo", "admin", "wheel"]);
 const dismissedCode = 126;
 const refusedCode = 127;
+const verifyLine = /^(?:missing {2}|[?.\w]{9}) ([c ]) \//;
 const wrongPassword =
   /incorrect password|no password was provided|Sorry, try again|Authentication failure/i;
 
@@ -44,13 +45,13 @@ function installCommand(packages: SystemPackage[], repair: boolean): string {
         ]
       : []),
     `${aptGetFile} -o DPkg::Lock::Timeout=300 update`,
-    `${aptGetFile} -o DPkg::Lock::Timeout=300 install --yes --no-install-recommends -- ${packages.join(" ")}`,
+    `${aptGetFile} -o DPkg::Lock::Timeout=300 install --yes --no-install-recommends${repair ? " --reinstall" : ""} -- ${packages.join(" ")}`,
   ].join("; ");
 }
 
-export async function readSystemPackages(): Promise<
-  BuildToolsStatus["system"]
-> {
+export async function readSystemPackages(
+  log?: Log,
+): Promise<BuildToolsStatus["system"]> {
   const { output } = await runProcess(
     dpkgQueryFile,
     [
@@ -58,7 +59,7 @@ export async function readSystemPackages(): Promise<
       "--showformat=${Package}\\t${db:Status-Status}\\n",
       ...systemPackages,
     ],
-    { env: plainEnvironment(), timeoutMs: 10_000 },
+    { env: plainEnvironment(), timeoutMs: 10_000, log },
   ).catch(() => ({ code: null, output: "" }));
   const installed = new Set(
     output
@@ -71,6 +72,45 @@ export async function readSystemPackages(): Promise<
     name,
     installed: installed.has(name),
   }));
+}
+
+async function hasDamagedFiles(
+  packages: SystemPackage[],
+  log?: Log,
+): Promise<boolean> {
+  const { output } = await runProcess(
+    dpkgFile,
+    ["--verify", "--verify-format=rpm", ...packages],
+    { env: plainEnvironment(), log },
+  );
+  return output.split("\n").some((line) => verifyLine.exec(line)?.[1] === " ");
+}
+
+async function damagedSystemPackages(log?: Log): Promise<SystemPackage[]> {
+  const installed = (await readSystemPackages(log))
+    .filter((item) => item.installed)
+    .map((item) => item.name);
+  if (installed.length === 0 || !(await hasDamagedFiles(installed, log))) {
+    return [];
+  }
+  const damaged: SystemPackage[] = [];
+  for (const name of installed) {
+    if (await hasDamagedFiles([name], log)) {
+      damaged.push(name);
+    }
+  }
+  return damaged;
+}
+
+export async function verifySystemPackages(report: Report): Promise<void> {
+  report.progress("Checking that every package is installed and intact");
+  const damaged = await damagedSystemPackages(report.log);
+  if (damaged.length > 0) {
+    const subject = damaged.length === 1 ? "has" : "have";
+    throw new StepError(
+      `${damaged.join(", ")} ${subject} files that differ from what dpkg installed.`,
+    );
+  }
 }
 
 async function passwordAccount(): Promise<PasswordAccount> {
@@ -189,11 +229,13 @@ export async function installSystemPackages(
   const missing = (await readSystemPackages())
     .filter((item) => !item.installed)
     .map((item) => item.name);
-  if (missing.length === 0) {
+  const damaged = options.clean ? await damagedSystemPackages(report.log) : [];
+  const needed = [...missing, ...damaged];
+  if (needed.length === 0) {
     report.progress("All of them are installed", 1);
     return;
   }
-  const listed = missing.join(", ");
+  const listed = needed.join(", ");
   if (!(await isExecutable(aptGetFile))) {
     throw new StepError(
       `This computer has no apt-get to install ${listed} with. FleetFinch Developer needs a Debian-based system, such as Debian or Ubuntu.`,
@@ -202,7 +244,7 @@ export async function installSystemPackages(
   if (options.clean) {
     report.progress("Repairing apt and dpkg before installing again");
   }
-  const { code, output } = await runInstall(missing, options, report);
+  const { code, output } = await runInstall(needed, options, report);
   if (code !== 0) {
     throw new StepError(`apt-get could not install ${listed}.`, output);
   }

@@ -7,7 +7,12 @@ import {
   buildToolsProgressChannel,
   buildToolSteps,
 } from "@/buildTools.ts";
-import { readBuildTools, setUpBuildTools } from "@/main/buildTools/setup.ts";
+import {
+  type BuildToolsListener,
+  checkBuildTools,
+  readBuildTools,
+  setUpBuildTools,
+} from "@/main/buildTools/setup.ts";
 import { runMenuAction } from "@/main/menu.ts";
 import { getThemePreference, setThemePreference } from "@/main/theme.ts";
 
@@ -25,6 +30,22 @@ const setUpOptionsSchema = z
   })
   .optional();
 
+function listenerFor(window: BrowserWindow): BuildToolsListener {
+  const send = (channel: string, payload: unknown) => {
+    if (!window.isDestroyed()) {
+      window.webContents.send(channel, payload);
+    }
+  };
+  return {
+    progress: (progress) => {
+      send(buildToolsProgressChannel, progress);
+    },
+    log: (line) => {
+      send(buildToolsLogChannel, line);
+    },
+  };
+}
+
 export const handlers: Handlers = {
   getAppVersion: () => Promise.resolve(app.getVersion()),
   getTheme: () => Promise.resolve(getThemePreference()),
@@ -32,26 +53,12 @@ export const handlers: Handlers = {
   isWindowMaximized: (window) => Promise.resolve(window.isMaximized()),
   runMenuAction: (window, action) => runMenuAction(window, action),
   getBuildTools: () => readBuildTools(),
+  checkBuildTools: (window) => checkBuildTools(listenerFor(window)),
   setUpBuildTools: (window, options) => {
     const parsed = setUpOptionsSchema.safeParse(options);
     if (!parsed.success) {
       return Promise.reject(new Error("Refused unknown build tools options"));
     }
-    const send = (channel: string, payload: unknown) => {
-      if (!window.isDestroyed()) {
-        window.webContents.send(channel, payload);
-      }
-    };
-    return setUpBuildTools(
-      {
-        progress: (progress) => {
-          send(buildToolsProgressChannel, progress);
-        },
-        log: (line) => {
-          send(buildToolsLogChannel, line);
-        },
-      },
-      parsed.data,
-    );
+    return setUpBuildTools(listenerFor(window), parsed.data);
   },
 };

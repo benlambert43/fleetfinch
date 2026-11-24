@@ -17,6 +17,7 @@ import {
   type SystemPackage,
 } from "@/buildTools.ts";
 import {
+  finishBuildToolsCheck,
   finishBuildToolsTask,
   startBuildToolsTask,
 } from "@/renderer/buildToolsActivity.ts";
@@ -32,7 +33,19 @@ interface Problem {
   message: string;
   output: string;
   step: BuildToolStep | null;
+  retry: "check" | "setUp";
 }
+
+type Updates = "unchecked" | "outdated" | "current";
+
+const updateLabels: Record<Updates, string> = {
+  unchecked: "Check for Updates",
+  outdated: "Update Build Tools",
+  current: "Up to Date",
+};
+
+const upToDateButton =
+  "h-9 rounded-lg bg-foreground/10 px-3 text-subheadline text-muted";
 
 interface PasswordRequest {
   account: PasswordAccount;
@@ -74,7 +87,9 @@ function describe(step: BuildToolStep, status: BuildToolsStatus): string {
                 ? "clang does not run"
                 : `clang ${toolchain.clang}`,
               ...(toolchain.armv7 ? [] : ["cannot link armv7"]),
-              ...(toolchain.ldid ? [] : ["no ldid"]),
+              ...(toolchain.missing.length === 0
+                ? []
+                : [`no ${toolchain.missing.join(", ")}`]),
             ];
       const sdkPart =
         sdk === null
@@ -85,11 +100,20 @@ function describe(step: BuildToolStep, status: BuildToolsStatus): string {
   }
 }
 
-function buttonLabel(busy: boolean, ready: boolean): string {
+function buttonLabel(
+  busy: boolean,
+  checking: boolean,
+  ready: boolean,
+  updates: Updates,
+): string {
   if (busy) {
-    return "Setting Up…";
+    return checking ? "Checking…" : "Setting Up…";
   }
-  return ready ? "Update Build Tools" : "Set Up Build Tools";
+  return ready ? updateLabels[updates] : "Set Up Build Tools";
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function BuildTools() {
@@ -97,13 +121,62 @@ export function BuildTools() {
   const [progress, setProgress] = useState<BuildToolsProgress | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [request, setRequest] = useState<PasswordRequest | null>(null);
+  const [updates, setUpdates] = useState<Updates>("unchecked");
   const [pending, startTransition] = useTransition();
+  const [checking, startChecking] = useTransition();
   const passwordId = useId();
 
   useEffect(() => window.bridge.onBuildToolsProgress(setProgress), []);
 
+  useEffect(
+    () => () => {
+      setUpdates("unchecked");
+    },
+    [],
+  );
+
   const ready = readyBuildTools(status);
-  const busy = pending || progress !== null;
+  const allReady = areBuildToolsReady(status);
+  const busy = pending || checking || progress !== null;
+  const upToDate = allReady && updates === "current";
+
+  function checkForUpdates() {
+    setProblem(null);
+    startBuildToolsTask("Check build tools");
+    startChecking(async () => {
+      const result = await window.bridge
+        .checkBuildTools()
+        .catch((error: unknown) => ({
+          state: "error" as const,
+          message: errorMessage(error),
+        }));
+      finishBuildToolsCheck(result);
+      startChecking(() => {
+        setProgress(null);
+        if (result.state === "error") {
+          setProblem({
+            message: result.message,
+            output: "",
+            step: null,
+            retry: "check",
+          });
+          return;
+        }
+        setStatus(result.status);
+        if (result.state === "checked") {
+          setUpdates(result.updates.length > 0 ? "outdated" : "current");
+          return;
+        }
+        const damaged = result.state === "damaged";
+        setProblem({
+          message: `${buildToolLabels[result.step]}: ${result.message}`,
+          output: result.output,
+          step: damaged ? result.step : null,
+          retry: damaged ? "setUp" : "check",
+        });
+      });
+    });
+  }
 
   function setUp(options: BuildToolsSetUpOptions = {}) {
     setProblem(null);
@@ -117,16 +190,24 @@ export function BuildTools() {
         .setUpBuildTools(options)
         .catch((error: unknown) => ({
           state: "error" as const,
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         }));
       finishBuildToolsTask(result);
       startTransition(() => {
         setProgress(null);
         if (result.state === "error") {
-          setProblem({ message: result.message, output: "", step: null });
+          setProblem({
+            message: result.message,
+            output: "",
+            step: null,
+            retry: "setUp",
+          });
           return;
         }
         setStatus(result.status);
+        if (result.state === "ready") {
+          setUpdates("current");
+        }
         setRequest(
           result.state === "password"
             ? {
@@ -143,6 +224,7 @@ export function BuildTools() {
                 message: `${buildToolLabels[result.step]}: ${result.message}`,
                 output: result.output,
                 step: result.step,
+                retry: "setUp",
               }
             : null,
         );
@@ -215,12 +297,16 @@ export function BuildTools() {
           <button
             type="button"
             onClick={() => {
-              setUp();
+              if (allReady && updates === "unchecked") {
+                checkForUpdates();
+              } else {
+                setUp();
+              }
             }}
-            disabled={busy}
-            className={primaryButton}
+            disabled={busy || upToDate}
+            className={upToDate ? upToDateButton : primaryButton}
           >
-            {buttonLabel(busy, areBuildToolsReady(status))}
+            {buttonLabel(busy, checking, allReady, updates)}
           </button>
         )}
         {request === null && problem !== null && (
@@ -232,7 +318,11 @@ export function BuildTools() {
                 : `Clean up the failed ${buildToolLabels[problem.step]} install and try again`
             }
             onClick={() => {
-              setUp({ clean: problem.step ?? undefined });
+              if (problem.retry === "check") {
+                checkForUpdates();
+              } else {
+                setUp({ clean: problem.step ?? undefined });
+              }
             }}
             disabled={busy}
             className={primaryButton}

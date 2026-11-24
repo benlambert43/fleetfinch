@@ -61,7 +61,7 @@ export interface ProcessOptions {
   timeoutMs?: number;
   input?: string;
   answer?: { prompt: RegExp; text: string };
-  log?: Log;
+  log?: Log | undefined;
 }
 
 function quote(argument: string): string {

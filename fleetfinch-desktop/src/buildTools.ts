@@ -40,7 +40,7 @@ export interface BuildToolsStatus {
     release: string | null;
     clang: string | null;
     armv7: boolean;
-    ldid: boolean;
+    missing: string[];
   } | null;
   sdk: { release: string | null; adjusted: boolean } | null;
 }
@@ -78,6 +78,16 @@ export type BuildToolsSetup =
       status: BuildToolsStatus;
     };
 
+export type BuildToolsCheck =
+  | { state: "checked"; updates: BuildToolStep[]; status: BuildToolsStatus }
+  | {
+      state: "damaged" | "failed";
+      step: BuildToolStep;
+      message: string;
+      output: string;
+      status: BuildToolsStatus;
+    };
+
 export function readyBuildTools(
   status: BuildToolsStatus,
 ): Record<BuildToolStep, boolean> {
@@ -88,7 +98,7 @@ export function readyBuildTools(
       status.toolchain !== null &&
       status.toolchain.clang !== null &&
       status.toolchain.armv7 &&
-      status.toolchain.ldid &&
+      status.toolchain.missing.length === 0 &&
       status.sdk?.adjusted === true,
   };
 }

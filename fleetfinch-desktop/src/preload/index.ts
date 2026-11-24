@@ -25,6 +25,7 @@ const bridge: Bridge = {
   isWindowMaximized: invoke("isWindowMaximized"),
   runMenuAction: invoke("runMenuAction"),
   getBuildTools: invoke("getBuildTools"),
+  checkBuildTools: invoke("checkBuildTools"),
   setUpBuildTools: invoke("setUpBuildTools"),
   onWindowMaximizedChange: (listener) => {
     const forward = (_event: IpcRendererEvent, maximized: boolean) => {

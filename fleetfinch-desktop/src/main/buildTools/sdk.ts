@@ -6,7 +6,10 @@ import {
   installReleaseArchive,
   removeArchiveInstall,
 } from "@/main/buildTools/archive.ts";
-import { latestReleaseAsset } from "@/main/buildTools/github.ts";
+import {
+  isNewerRelease,
+  latestReleaseAsset,
+} from "@/main/buildTools/github.ts";
 import {
   exists,
   forgetRelease,
@@ -19,6 +22,7 @@ import { type Report, StepError } from "@/main/buildTools/process.ts";
 
 const sdkRepository = "theos/sdks";
 const sdkName = `${buildTarget.sdk}.sdk`;
+const sdkArchive = `${sdkName}.tar.xz`;
 const stubExtension = ".tbd";
 const frameworkExtension = ".framework";
 const oldModuleMap = "module.map";
@@ -206,6 +210,22 @@ export async function readSdk(): Promise<BuildToolsStatus["sdk"]> {
   };
 }
 
+export async function verifySdk(report: Report): Promise<void> {
+  report.progress(
+    `Checking that the iOS ${buildTarget.sdkVersion} SDK is adjusted for this toolchain`,
+  );
+  await readSdk();
+}
+
+export async function hasSdkUpdate(report: Report): Promise<boolean> {
+  if (!(await exists(sdkFolder()))) {
+    return false;
+  }
+  report.progress(`Looking for a newer iOS ${buildTarget.sdkVersion} SDK`);
+  const asset = await latestReleaseAsset(sdkRepository, sdkArchive);
+  return isNewerRelease(report, asset, (await readReleases()).sdk);
+}
+
 export async function cleanSdk(report: Report): Promise<void> {
   report.progress(
     `Removing the failed iOS ${buildTarget.sdkVersion} SDK install`,
@@ -216,7 +236,7 @@ export async function cleanSdk(report: Report): Promise<void> {
 
 export async function installSdk(report: Report): Promise<void> {
   report.progress(`Looking for the newest iOS ${buildTarget.sdkVersion} SDK`);
-  const asset = await latestReleaseAsset(sdkRepository, `${sdkName}.tar.xz`);
+  const asset = await latestReleaseAsset(sdkRepository, sdkArchive);
   const current = await readSdk();
   if (current?.release === asset.release) {
     if (!current.adjusted) {

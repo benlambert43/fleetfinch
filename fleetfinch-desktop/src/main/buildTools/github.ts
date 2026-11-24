@@ -4,7 +4,7 @@ import { open } from "node:fs/promises";
 import { net } from "electron";
 import { z } from "zod";
 
-import { StepError } from "@/main/buildTools/process.ts";
+import { type Report, StepError } from "@/main/buildTools/process.ts";
 
 const releaseSchema = z.object({
   tag_name: z.string().min(1),
@@ -68,6 +68,21 @@ export async function latestReleaseAsset(
     size: asset.size,
     sha256,
   };
+}
+
+export function isNewerRelease(
+  report: Report,
+  asset: ReleaseAsset,
+  installed: string | undefined,
+): boolean {
+  const newer = asset.release !== installed;
+  report.progress(
+    newer
+      ? `${asset.release} is newer than the installed ${installed ?? "release"}`
+      : `${asset.release} is the newest release and is installed`,
+    1,
+  );
+  return newer;
 }
 
 export async function downloadAsset(
