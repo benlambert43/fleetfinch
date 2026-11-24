@@ -62,6 +62,7 @@ export interface ProcessOptions {
   input?: string;
   answer?: { prompt: RegExp; text: string };
   log?: Log | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 function quote(argument: string): string {
@@ -101,6 +102,7 @@ export function runProcess(
     input,
     answer,
     log,
+    signal,
   }: ProcessOptions = {},
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
@@ -109,6 +111,7 @@ export function runProcess(
       env,
       stdio: ["pipe", "pipe", "pipe"],
       timeout: timeoutMs,
+      signal,
     });
     if (log) {
       logLines(child.stdout, log);

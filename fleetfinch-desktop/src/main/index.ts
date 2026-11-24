@@ -22,6 +22,10 @@ import { stopWatchingDevices, watchDevices } from "@/main/deviceLogs.ts";
 import { handlers } from "@/main/handlers.ts";
 import { logApp, logAppError } from "@/main/logs.ts";
 import { setApplicationMenu } from "@/main/menu.ts";
+import {
+  stopWatchingSshDevices,
+  watchSshDevices,
+} from "@/main/sshDeviceLogs.ts";
 import { restoreThemePreference } from "@/main/theme.ts";
 
 // Security model. The window is treated as untrusted: it shows data from the
@@ -241,6 +245,9 @@ async function start(): Promise<void> {
   setApplicationMenu();
   createWindow();
   watchDevices();
+  watchSshDevices().catch((error: unknown) => {
+    logAppError("Could not start refreshing device logs over SSH", error);
+  });
   app.on("activate", showWindow);
   app.on("second-instance", showWindow);
 }
@@ -297,6 +304,7 @@ app.on("child-process-gone", (_event, { type, reason, exitCode }) => {
 });
 
 app.on("will-quit", stopWatchingDevices);
+app.on("will-quit", stopWatchingSshDevices);
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

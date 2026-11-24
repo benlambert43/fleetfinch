@@ -32,6 +32,8 @@ export interface SshKey {
 }
 
 let keyReady: Promise<string> | null = null;
+let priorityTasks = 0;
+const priorityListeners = new Set<(running: boolean) => void>();
 
 function sshFolder(): string {
   return path.join(app.getPath("userData"), "ssh");
@@ -43,6 +45,42 @@ function keyFile(): string {
 
 function knownHostsFile(): string {
   return path.join(sshFolder(), "known_hosts");
+}
+
+function notifyPriority(running: boolean): void {
+  for (const listener of priorityListeners) {
+    listener(running);
+  }
+}
+
+export function priorityRunning(): boolean {
+  return priorityTasks > 0;
+}
+
+export function onPriorityChange(
+  listener: (running: boolean) => void,
+): () => void {
+  priorityListeners.add(listener);
+  return () => {
+    priorityListeners.delete(listener);
+  };
+}
+
+export async function withPriority<Result>(
+  run: () => Promise<Result>,
+): Promise<Result> {
+  priorityTasks += 1;
+  if (priorityTasks === 1) {
+    notifyPriority(true);
+  }
+  try {
+    return await run();
+  } finally {
+    priorityTasks -= 1;
+    if (priorityTasks === 0) {
+      notifyPriority(false);
+    }
+  }
 }
 
 export async function hasSsh(): Promise<boolean> {
@@ -235,7 +273,8 @@ export function runWithPassword(
 export async function runAsRoot(
   address: string,
   command: string,
-  log: Log,
+  log?: Log,
+  signal?: AbortSignal,
 ): Promise<ProcessResult> {
   const identities = (await identityFiles()).flatMap((file) => ["-i", file]);
   return runProcess(
@@ -255,6 +294,6 @@ export async function runAsRoot(
       ],
       command,
     ),
-    { env: sshEnvironment(), timeoutMs, log },
+    { env: sshEnvironment(), timeoutMs, log, signal },
   );
 }

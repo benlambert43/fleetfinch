@@ -38,6 +38,7 @@ export interface BridgeMethods {
   removeDevice: (address: string, revoke: boolean) => Promise<DeviceRemoval>;
   exportBackup: (password: string) => Promise<BackupExport>;
   restoreBackup: (password: string) => Promise<BackupRestore>;
+  setDeviceLogRefresh: (enabled: boolean) => Promise<void>;
 }
 
 export interface Bridge extends BridgeMethods {

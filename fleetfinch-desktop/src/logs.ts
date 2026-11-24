@@ -51,10 +51,16 @@ export interface LogGroup extends LogGroupInfo {
   lines: LogLine[];
 }
 
+export interface SshLogRefresh {
+  enabled: boolean;
+  paused: boolean;
+}
+
 export interface LogsSnapshot {
   seq: number;
   groups: LogGroup[];
   canReadDevices: boolean;
+  sshRefresh: SshLogRefresh;
 }
 
 export interface LogsUpdate {
@@ -63,6 +69,7 @@ export interface LogsUpdate {
   lines: { id: string; lines: LogLine[] }[];
   removed: string[];
   canReadDevices: boolean;
+  sshRefresh: SshLogRefresh;
 }
 
 export function keepLatest(

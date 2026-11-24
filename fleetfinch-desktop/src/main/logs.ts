@@ -13,6 +13,7 @@ import {
   type LogsSnapshot,
   type LogSource,
   type LogsUpdate,
+  type SshLogRefresh,
 } from "@/logs.ts";
 
 export interface LogWriter {
@@ -29,8 +30,9 @@ const groups = new Map<string, LogGroup>();
 const pendingGroups = new Map<string, LogGroupInfo>();
 const pendingLines = new Map<string, LogLine[]>();
 const pendingRemoved = new Set<string>();
-let pendingDevices = false;
+let pendingStatus = false;
 let canReadDevices = false;
+let sshRefresh: SshLogRefresh = { enabled: false, paused: false };
 let nextGroupId = 0;
 let nextLineId = 0;
 let seq = 0;
@@ -47,7 +49,7 @@ function flush(): void {
     pendingGroups.size === 0 &&
     pendingLines.size === 0 &&
     pendingRemoved.size === 0 &&
-    !pendingDevices
+    !pendingStatus
   ) {
     return;
   }
@@ -61,11 +63,12 @@ function flush(): void {
     })),
     removed: [...pendingRemoved],
     canReadDevices,
+    sshRefresh,
   };
   pendingGroups.clear();
   pendingLines.clear();
   pendingRemoved.clear();
-  pendingDevices = false;
+  pendingStatus = false;
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.webContents.send(logsChannel, update);
@@ -146,13 +149,24 @@ export function openLogGroup(
 
 export function readLogs(): LogsSnapshot {
   flush();
-  return { seq, groups: [...groups.values()], canReadDevices };
+  return { seq, groups: [...groups.values()], canReadDevices, sshRefresh };
 }
 
 export function setCanReadDevices(value: boolean): void {
   if (canReadDevices !== value) {
     canReadDevices = value;
-    pendingDevices = true;
+    pendingStatus = true;
+    scheduleFlush();
+  }
+}
+
+export function setSshRefresh(value: SshLogRefresh): void {
+  if (
+    sshRefresh.enabled !== value.enabled ||
+    sshRefresh.paused !== value.paused
+  ) {
+    sshRefresh = value;
+    pendingStatus = true;
     scheduleFlush();
   }
 }

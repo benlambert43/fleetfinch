@@ -24,7 +24,7 @@ const infoLine = /^(\w+): (.*)$/;
 const connectedPrefix = "[connected:";
 const disconnectedPrefix = "[disconnected:";
 const failedLine = /^(?:ERROR:|Could not start logger)/;
-const errorLine = /^\w{3} [^<]*\] <(?:Error|Fault)>:/;
+export const errorLine = /^\w{3} [^<]*\] <(?:Error|Fault)>:/;
 
 interface Reader {
   udid: string;

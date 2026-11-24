@@ -5,6 +5,7 @@ import {
   type LogGroup,
   type LogSource,
   type LogsUpdate,
+  type SshLogRefresh,
 } from "@/logs.ts";
 
 export const logsHref = "#/logs";
@@ -12,6 +13,7 @@ export const logsHref = "#/logs";
 interface Logs {
   groups: readonly LogGroup[];
   canReadDevices: boolean;
+  sshRefresh: SshLogRefresh;
   source: LogSource;
   selected: Record<LogSource, string | null>;
 }
@@ -19,6 +21,7 @@ interface Logs {
 let logs: Logs = {
   groups: [],
   canReadDevices: false,
+  sshRefresh: { enabled: false, paused: false },
   source: "app",
   selected: { app: null, computer: null, device: null },
 };
@@ -85,6 +88,7 @@ function apply(update: LogsUpdate): void {
   emit({
     ...logs,
     canReadDevices: update.canReadDevices,
+    sshRefresh: update.sshRefresh,
     groups: [...kept, ...created],
   });
 }
@@ -107,6 +111,7 @@ export const logsLoaded: Promise<void> = window.bridge
       ...logs,
       groups: snapshot.groups,
       canReadDevices: snapshot.canReadDevices,
+      sshRefresh: snapshot.sshRefresh,
     });
     settle();
   })
@@ -128,6 +133,15 @@ export function setLogSource(source: LogSource): void {
   if (logs.source !== source) {
     emit({ ...logs, source });
   }
+}
+
+export function setSshRefreshEnabled(enabled: boolean): void {
+  const previous = logs.sshRefresh;
+  emit({ ...logs, sshRefresh: { ...previous, enabled } });
+  window.bridge.setDeviceLogRefresh(enabled).catch((error: unknown) => {
+    console.error("The device log refresh setting could not be changed", error);
+    emit({ ...logs, sshRefresh: previous });
+  });
 }
 
 export function selectLogGroup(source: LogSource, id: string): void {

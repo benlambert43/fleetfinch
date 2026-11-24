@@ -34,6 +34,7 @@ const bridge: Bridge = {
   removeDevice: invoke("removeDevice"),
   exportBackup: invoke("exportBackup"),
   restoreBackup: invoke("restoreBackup"),
+  setDeviceLogRefresh: invoke("setDeviceLogRefresh"),
   onWindowMaximizedChange: (listener) => {
     const forward = (_event: IpcRendererEvent, maximized: boolean) => {
       listener(maximized);

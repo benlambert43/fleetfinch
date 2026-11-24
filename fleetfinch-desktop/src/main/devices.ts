@@ -29,6 +29,7 @@ import {
   runAsRoot,
   runWithPassword,
   sshFailedCode,
+  withPriority,
 } from "@/main/ssh.ts";
 
 const authorizedKeys = ".ssh/authorized_keys";
@@ -92,7 +93,7 @@ function failed(field: DeviceField | null, message: string): DeviceFailure {
   return { state: "failed", field, message };
 }
 
-function sshFailed({ code }: ProcessResult): boolean {
+export function sshFailed({ code }: ProcessResult): boolean {
   return code === null || code === sshFailedCode;
 }
 
@@ -125,7 +126,7 @@ function found(pattern: RegExp, output: string): string | null {
   return text === "" ? null : text;
 }
 
-function connectionFailure(
+export function connectionFailure(
   address: string,
   { code, output }: ProcessResult,
 ): DeviceFailure {
@@ -213,7 +214,9 @@ export async function addDevice({
   }
   const group = openLogGroup("computer", `Add device ${parsed.data}`);
   try {
-    const result = await connect(parsed.data, password, group);
+    const result = await withPriority(() =>
+      connect(parsed.data, password, group),
+    );
     if (result.state === "connected") {
       group.log({
         kind: "message",
@@ -262,10 +265,12 @@ async function revokeKeys(address: string): Promise<string | null> {
     text: "Remove this computer's keys from the device",
   });
   try {
-    const result = await runAsRoot(
-      address,
-      revokeKeysCommand(keys.map(({ publicKey }) => publicKey)),
-      group.log,
+    const result = await withPriority(() =>
+      runAsRoot(
+        address,
+        revokeKeysCommand(keys.map(({ publicKey }) => publicKey)),
+        group.log,
+      ),
     );
     const problem = revokeProblem(address, result);
     if (problem === null) {

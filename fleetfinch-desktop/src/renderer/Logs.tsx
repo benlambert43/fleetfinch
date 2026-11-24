@@ -33,6 +33,7 @@ import {
   logsLoaded,
   selectLogGroup,
   setLogSource,
+  setSshRefreshEnabled,
   useLogs,
   useLogSource,
 } from "@/renderer/logs.ts";
@@ -43,7 +44,7 @@ const descriptions: Record<LogSource, string> = {
   computer:
     "Each task the app runs on this computer, with every command it starts and each line those programs print",
   device:
-    "The system log of each iPhone or iPad while it is connected by USB, kept apart for each time it connects",
+    "The system log of each iPhone or iPad, read while it is connected by USB or refreshed over SSH, kept apart for each time it connects",
 };
 
 const groupNouns: Record<LogSource, string> = {
@@ -349,10 +350,10 @@ function EmptyLogs({ source }: { source: LogSource }) {
         ? {
             title: "No devices yet",
             description:
-              "Connect an iPhone or iPad by USB to read its log here",
+              "Connect an iPhone or iPad by USB, or refresh devices added over SSH",
           }
         : {
-            title: "Device logs need libimobiledevice-utils",
+            title: "USB device logs need libimobiledevice-utils",
             description:
               "Set Up Build Tools in Computer Info on Home installs it",
           }),
@@ -362,6 +363,34 @@ function EmptyLogs({ source }: { source: LogSource }) {
     <dl className="flex min-h-64 flex-1 flex-col items-center justify-center">
       <StatusRow {...empty[source]} />
     </dl>
+  );
+}
+
+function SshRefreshOption() {
+  const { sshRefresh } = useLogs();
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <label className="flex items-center gap-2 text-subheadline">
+        <input
+          type="checkbox"
+          checked={sshRefresh.enabled}
+          onChange={(event) => {
+            setSshRefreshEnabled(event.target.checked);
+          }}
+          className="size-4 accent-primary"
+        />
+        Refresh devices added over SSH every 5 seconds
+      </label>
+      {sshRefresh.enabled && sshRefresh.paused && (
+        <span
+          role="status"
+          className="flex items-center gap-1 text-footnote text-muted"
+        >
+          <PauseCircleIcon aria-hidden="true" className="size-4 shrink-0" />
+          Paused while another SSH task runs
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -390,6 +419,7 @@ function SourcePanel({
       className="flex min-h-0 flex-1 flex-col gap-4"
     >
       <p className="text-footnote text-muted">{descriptions[source]}</p>
+      {source === "device" && <SshRefreshOption />}
       {selected === undefined ? (
         <EmptyLogs source={source} />
       ) : (

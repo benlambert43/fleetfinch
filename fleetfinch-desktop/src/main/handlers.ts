@@ -17,6 +17,7 @@ import { exportBackup, restoreBackup } from "@/main/backup.ts";
 import { addDevice, readDevices, removeDevice } from "@/main/devices.ts";
 import { readLogs } from "@/main/logs.ts";
 import { runMenuAction } from "@/main/menu.ts";
+import { setDeviceLogRefresh } from "@/main/sshDeviceLogs.ts";
 import { getThemePreference, setThemePreference } from "@/main/theme.ts";
 
 type Handlers = {
@@ -110,5 +111,12 @@ export const handlers: Handlers = {
       return Promise.reject(new Error("Refused an unusable backup password"));
     }
     return restoreBackup(window, parsed.data);
+  },
+  setDeviceLogRefresh: (_window, enabled) => {
+    const parsed = z.boolean().safeParse(enabled);
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused an unknown refresh setting"));
+    }
+    return setDeviceLogRefresh(parsed.data);
   },
 };
