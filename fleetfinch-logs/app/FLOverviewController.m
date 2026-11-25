@@ -1,5 +1,6 @@
 #import "FLOverviewController.h"
 
+#import "FLInventoryController.h"
 #import "FLReader.h"
 #import "FLSettings.h"
 #import "FLStatus.h"
@@ -125,6 +126,23 @@ static const NSTimeInterval FLFreshFor = 20;
                        FLFormatDuration([report[@"watched"] doubleValue])];
     [sections addObject:usage];
   }
+
+  FLSection *installed = [FLSection sectionWithTitle:@"What Is Installed"];
+  NSDate *listed = [FLInventoryController listed];
+  __weak FLOverviewController *owner = self;
+  [installed
+    addRow:[FLRow linkWithTitle:@"Everything Installed"
+                         detail:listed == nil ? @"Not listed yet"
+                                              : [@"Listed " stringByAppendingString:FLAgo(listed)]
+                         action:^{
+                           [owner.navigationController
+                             pushViewController:[FLInventoryController new]
+                                       animated:YES];
+                         }]];
+  installed.footer = @"Every app, service, framework, plug-in, program and library on the "
+                     @"device, with its size and what it offers, and where the system volume's "
+                     @"space goes.";
+  [sections addObject:installed];
 
   NSDictionary *resources = [self resourcesFrom:status];
   if (running && resources.count > 0) {

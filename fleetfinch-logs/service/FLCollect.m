@@ -476,8 +476,27 @@ static NSString *FLCollectProcesses(void) {
   return text;
 }
 
-NSArray<NSDictionary *> *FLLaunchServices(void) {
-  NSMutableArray *services = [NSMutableArray new];
+static BOOL FLLoadsHere(NSDictionary *plist) {
+  NSArray<NSArray *> *rules = @[
+    @[ @"LimitLoadToHardware", @YES ], @[ @"LimitLoadFromHardware", @NO ]
+  ];
+  for (NSArray *rule in rules) {
+    NSDictionary *limits = plist[rule[0]];
+    if (![limits isKindOfClass:[NSDictionary class]]) {
+      continue;
+    }
+    for (NSString *key in limits) {
+      NSString *value = FLSysctlString([@"hw." stringByAppendingString:[key description]]);
+      NSArray *listed = [limits[key] isKindOfClass:[NSArray class]] ? limits[key] : @[];
+      if (value != nil && [listed containsObject:value] != [rule[1] boolValue]) {
+        return NO;
+      }
+    }
+  }
+  return YES;
+}
+
+void FLEachLaunchDefinition(void (^visit)(NSDictionary *service, NSDictionary *plist)) {
   NSFileManager *manager = [NSFileManager defaultManager];
   NSArray *folders = @[
     @"/System/Library/LaunchDaemons", @"/Library/LaunchDaemons",
@@ -503,6 +522,9 @@ NSArray<NSDictionary *> *FLLaunchServices(void) {
         NSString *program = [plist[@"Program"] isKindOfClass:[NSString class]]
           ? plist[@"Program"]
           : (arguments.count > 0 ? [arguments[0] description] : @"");
+        if (program.length == 0) {
+          continue;
+        }
         NSMutableDictionary *service = [NSMutableDictionary new];
         service[@"label"] = [plist[@"Label"] description] ?: name.stringByDeletingPathExtension;
         service[@"file"] = file;
@@ -514,6 +536,18 @@ NSArray<NSDictionary *> *FLLaunchServices(void) {
         service[@"disabled"] = @([plist[@"Disabled"] boolValue]);
         service[@"onDemand"] = @(plist[@"MachServices"] != nil ||
                                  plist[@"Sockets"] != nil);
+        if (!FLLoadsHere(plist)) {
+          service[@"elsewhere"] = @YES;
+        }
+        if (plist[@"LaunchEvents"] != nil) {
+          service[@"onEvent"] = @YES;
+        }
+        if (plist[@"WatchPaths"] != nil || plist[@"QueueDirectories"] != nil) {
+          service[@"onPath"] = @YES;
+        }
+        if (plist[@"StartInterval"] != nil || plist[@"StartCalendarInterval"] != nil) {
+          service[@"onTimer"] = @YES;
+        }
         if ([plist[@"UserName"] isKindOfClass:[NSString class]]) {
           service[@"user"] = plist[@"UserName"];
         }
@@ -521,10 +555,17 @@ NSArray<NSDictionary *> *FLLaunchServices(void) {
           service[@"machServices"] = [[plist[@"MachServices"] allKeys]
             sortedArrayUsingSelector:@selector(compare:)];
         }
-        [services addObject:service];
+        visit(service, plist);
       }
     }
   }
+}
+
+NSArray<NSDictionary *> *FLLaunchServices(void) {
+  NSMutableArray *services = [NSMutableArray new];
+  FLEachLaunchDefinition(^(NSDictionary *service, NSDictionary *plist) {
+    [services addObject:service];
+  });
   return services;
 }
 
@@ -609,6 +650,9 @@ NSArray<NSDictionary *> *FLServiceTable(NSDictionary<NSString *, NSDictionary *>
                                         NSArray<NSDictionary *> *definitions) {
   NSMutableDictionary<NSString *, NSMutableDictionary *> *rows = [NSMutableDictionary new];
   for (NSDictionary *definition in definitions) {
+    if (rows[definition[@"label"]] != nil && [definition[@"elsewhere"] boolValue]) {
+      continue;
+    }
     NSMutableDictionary *row = [definition mutableCopy];
     row[@"loaded"] = @NO;
     row[@"pid"] = @0;
@@ -645,6 +689,9 @@ NSArray<NSDictionary *> *FLServiceTable(NSDictionary<NSString *, NSDictionary *>
 
 NSString *FLServiceStarts(NSDictionary *service) {
   NSMutableArray *flags = [NSMutableArray new];
+  if ([service[@"elsewhere"] boolValue]) {
+    [flags addObject:@"not loaded on this model"];
+  }
   if ([service[@"runAtLoad"] boolValue]) {
     [flags addObject:@"at boot"];
   }
@@ -653,6 +700,15 @@ NSString *FLServiceStarts(NSDictionary *service) {
   }
   if ([service[@"onDemand"] boolValue]) {
     [flags addObject:@"when something asks for it"];
+  }
+  if ([service[@"onEvent"] boolValue]) {
+    [flags addObject:@"on a system event"];
+  }
+  if ([service[@"onPath"] boolValue]) {
+    [flags addObject:@"when a watched path changes"];
+  }
+  if ([service[@"onTimer"] boolValue]) {
+    [flags addObject:@"on a timer"];
   }
   if ([service[@"disabled"] boolValue]) {
     [flags addObject:@"disabled"];
@@ -977,6 +1033,14 @@ static NSString *FLCollectKernelLog(void) {
   return messages.length > 0 ? messages : @"The kernel's message buffer could not be read.\n";
 }
 
+NSString *FLSnapshotHeading(NSString *kind, NSString *why, NSDate *taken) {
+  struct utsname name;
+  uname(&name);
+  return [NSString stringWithFormat:@"%@\nTaken: %@\nDevice: %s (%s)\nReason: %@\n\n",
+                                    FLCollectTitle(kind), FLTimestamp(taken), name.nodename,
+                                    name.machine, why];
+}
+
 NSArray<NSString *> *FLCollectKinds(void) {
   return @[
     @"environment", @"device", @"processes", @"services", @"apps", @"packages",
@@ -1001,6 +1065,8 @@ NSString *FLCollectTitle(NSString *kind) {
     @"sysctl" : @"Kernel settings and counters",
     @"registry" : @"Hardware in the I/O Registry",
     @"usage" : @"What has run and what never has",
+    @"inventory" : @"What is installed",
+    @"dependencies" : @"What depends on what",
   };
   return titles[kind] ?: kind;
 }

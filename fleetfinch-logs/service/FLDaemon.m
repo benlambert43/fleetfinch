@@ -2,15 +2,19 @@
 
 #import <notify.h>
 #import <signal.h>
+#import <spawn.h>
 #import <sys/utsname.h>
+#import <sys/wait.h>
 
 #import "FLCollect.h"
 #import "FLCommon.h"
+#import "FLInventory.h"
 #import "FLMonitors.h"
 #import "FLSettings.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
 
+extern char **environ;
 extern void xpc_transaction_begin(void);
 extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *buffer,
                                 size_t size);
@@ -29,6 +33,11 @@ static const NSTimeInterval FLSlowLaunch = 2;
 static const NSTimeInterval FLAppsInterval = 600;
 static const NSTimeInterval FLAppsFirst = 120;
 static const NSTimeInterval FLReportEvery = 30;
+static const NSTimeInterval FLInventoryFirst = 60;
+static const NSTimeInterval FLInventoryCheck = 600;
+static const NSTimeInterval FLInventoryRetry = 3600;
+static NSString *const FLInventoryKept = @"inventory";
+static NSString *const FLInstalledProgram = @"/usr/bin/finchlog";
 
 static dispatch_queue_t FLWork;
 static NSMutableDictionary<NSString *, dispatch_source_t> *FLTimers;
@@ -47,6 +56,11 @@ static NSDate *FLUsageAt;
 static NSDate *FLSampledAt;
 static NSDate *FLReportedAt;
 static NSUInteger FLServicesWritten;
+static pid_t FLLister;
+static NSDate *FLListerStarted;
+static NSDate *FLListerFailed;
+static NSString *FLListerMarks;
+static dispatch_source_t FLListerExit;
 
 static FLSyslogMonitor *FLSyslog;
 static FLKernelMonitor *FLKernel;
@@ -127,11 +141,7 @@ static void FLTakeSnapshot(NSString *kind, NSString *why) {
     return;
   }
   NSDate *began = [NSDate date];
-  struct utsname name;
-  uname(&name);
-  NSString *heading = [NSString
-    stringWithFormat:@"%@\nTaken: %@\nDevice: %s (%s)\nReason: %@\n\n", FLCollectTitle(kind),
-                     FLTimestamp(began), name.nodename, name.machine, why];
+  NSString *heading = FLSnapshotHeading(kind, why, began);
   NSString *path = [[FLStore shared] saveSnapshot:kind
                                            pieces:^BOOL(void (^write)(NSString *piece)) {
                                              write(heading);
@@ -312,6 +322,105 @@ static void FLImport(void) {
   }
 }
 
+static void FLListerEnded(int status) {
+  NSTimeInterval took = -FLListerStarted.timeIntervalSinceNow;
+  NSDate *written = FLStateWritten(FLInventoryState);
+  BOOL clean = WIFEXITED(status) && WEXITSTATUS(status) == 0;
+  BOOL listed = clean || (written != nil && [written timeIntervalSinceDate:FLListerStarted] > 0);
+  if (FLListerExit != nil) {
+    dispatch_source_cancel(FLListerExit);
+    FLListerExit = nil;
+  }
+  FLLister = 0;
+  FLListerFailed = clean ? nil : [NSDate date];
+  if (listed) {
+    FLState[FLInventoryKept] =
+      @{@"at" : [NSDate date], @"marks" : FLListerMarks ?: @"", @"took" : @(took)};
+    FLSaveState();
+  }
+  if (clean) {
+    FLNote(@"finchlogs", FLLevelInfo, @"inventory",
+           @"listed what is installed and what depends on what in %@", FLFormatDuration(took));
+  } else if (listed) {
+    FLNote(@"finchlogs", FLLevelWarning, @"inventory",
+           @"listed what is installed in %@, but the helper ended with %@ before it had worked "
+           @"out what depends on what",
+           FLFormatDuration(took), FLDescribeExit(status));
+  } else {
+    FLNote(@"finchlogs", FLLevelWarning, @"inventory",
+           @"what is installed could not be listed: the helper ended with %@ after %@",
+           FLDescribeExit(status), FLFormatDuration(took));
+  }
+}
+
+static BOOL FLReapLister(void) {
+  int status = 0;
+  if (FLLister <= 0 || waitpid(FLLister, &status, WNOHANG) != FLLister) {
+    return NO;
+  }
+  FLListerEnded(status);
+  return YES;
+}
+
+static void FLStartLister(NSString *why) {
+  if (FLLister > 0 && !FLReapLister()) {
+    return;
+  }
+  NSString *program = [NSBundle mainBundle].executablePath ?: FLInstalledProgram;
+  NSMutableArray<NSString *> *arguments =
+    [@[ program.lastPathComponent, @"inventory", @"--save" ] mutableCopy];
+  if (FLRecords(@"snapshot")) {
+    [arguments addObjectsFromArray:@[ @"--snapshot", @"--reason", why ]];
+  }
+  char **argv = calloc(arguments.count + 1, sizeof(char *));
+  for (NSUInteger index = 0; index < arguments.count; index++) {
+    argv[index] = (char *)arguments[index].UTF8String;
+  }
+  pid_t pid = 0;
+  FLListerMarks = FLInventoryMarks();
+  int failed = posix_spawn(&pid, program.fileSystemRepresentation, NULL, NULL, argv, environ);
+  free(argv);
+  if (failed != 0) {
+    FLListerFailed = [NSDate date];
+    FLNote(@"finchlogs", FLLevelWarning, @"inventory",
+           @"the helper that lists what is installed could not be started: %s",
+           strerror(failed));
+    return;
+  }
+  FLLister = pid;
+  FLListerStarted = [NSDate date];
+  FLNote(@"finchlogs", FLLevelInfo, @"inventory",
+         @"listing what is installed in pid %d, because %@", (int)pid, why);
+  FLListerExit = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid,
+                                        DISPATCH_PROC_EXIT, FLWork);
+  dispatch_source_set_event_handler(FLListerExit, ^{
+    if (FLLister == pid) {
+      FLReapLister();
+    }
+  });
+  dispatch_resume(FLListerExit);
+  FLReapLister();
+}
+
+static void FLCheckInventory(void) {
+  if (FLLister > 0 && !FLReapLister()) {
+    return;
+  }
+  if (FLListerFailed != nil && -FLListerFailed.timeIntervalSinceNow < FLInventoryRetry) {
+    return;
+  }
+  NSDictionary *last = FLState[FLInventoryKept];
+  NSDate *written = FLStateWritten(FLInventoryState);
+  NSTimeInterval daily = [FLSettings number:FLSettingSnapshotInterval];
+  if (written == nil || ![last isKindOfClass:[NSDictionary class]]) {
+    FLStartLister(@"nothing was listed yet");
+  } else if (![last[@"marks"] isEqual:FLInventoryMarks()]) {
+    FLStartLister(@"something was installed or removed");
+  } else if (daily > 0 && -written.timeIntervalSinceNow >= daily) {
+    FLStartLister(@"it was time for a new one");
+  }
+}
+
 static BOOL FLWatched(void) {
   return FLWatchedUntil != nil && FLWatchedUntil.timeIntervalSinceNow > 0;
 }
@@ -445,6 +554,9 @@ static void FLSchedule(void) {
   });
   FLEvery(@"snapshot", FLRecords(@"snapshot") ? 600 : 0, 600, ^{
     FLTakeDueSnapshots();
+  });
+  FLEvery(@"inventory", FLInventoryCheck, FLInventoryFirst, ^{
+    FLCheckInventory();
   });
   FLEvery(@"status", 15, 5, ^{
     FLWriteStatus();
@@ -587,6 +699,10 @@ int FLRunDaemon(void) {
   FLOnCommand(FLCommandSnapshot, ^{
     FLNote(@"finchlogs", FLLevelInfo, @"command", @"Asked to take every snapshot now");
     FLTakeSnapshots(FLCollectKinds(), @"it was asked for");
+    FLStartLister(@"it was asked for");
+  });
+  FLOnCommand(FLCommandInventory, ^{
+    FLStartLister(@"it was asked for");
   });
   FLOnCommand(FLCommandImport, ^{
     FLNote(@"finchlogs", FLLevelInfo, @"command", @"Asked to look for new dumps now");

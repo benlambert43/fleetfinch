@@ -96,10 +96,10 @@ static const integer_t FLWatcherImportance = 16;
         process.started = at;
         process.name = @"";
       }
-      if (!copy && process.path.length > 0) {
-        process.arguments = FLProcessSketch(child, YES).arguments;
-      } else if (copy) {
-        process.arguments = origin.arguments;
+      if (process.path.length > 0) {
+        NSArray<NSString *> *own = FLProcessSketch(child, YES).arguments;
+        copy = copy && (own.count == 0 || [own isEqualToArray:origin.arguments]);
+        process.arguments = copy ? origin.arguments : own;
       }
       FLProcessEvent *event = [self event:FLProcessAppeared process:process at:at];
       event.clone = copy;

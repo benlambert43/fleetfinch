@@ -110,6 +110,10 @@ static NSArray<NSString *> *FLUsageKinds(void) {
 - (NSString *)stateOf:(NSDictionary *)row {
   NSUInteger running = [row[@"running"] unsignedIntegerValue];
   NSString *origin = [row[@"origin"] length] > 0 ? row[@"origin"] : @"an unknown place";
+  uint64_t bytes = [row[@"bytes"] unsignedLongLongValue];
+  if (bytes > 0) {
+    origin = [NSString stringWithFormat:@"%@ · %@", origin, FLFormatBytes(bytes)];
+  }
   if (![row[@"ran"] boolValue]) {
     return [NSString stringWithFormat:@"Never ran · from %@", origin];
   }
@@ -136,6 +140,8 @@ static NSArray<NSString *> *FLUsageKinds(void) {
     [pairs addObject:@[ @"Defined in", row[@"file"] ?: @"" ]];
   }
   [pairs addObject:@[ @"From", row[@"origin"] ?: @"" ]];
+  uint64_t bytes = [row[@"bytes"] unsignedLongLongValue];
+  [pairs addObject:@[ @"Size", bytes > 0 ? FLFormatBytes(bytes) : @"" ]];
   NSString *state = @"Never seen running";
   if (running > 0) {
     state = running == 1 ? @"Running now"
@@ -240,12 +246,16 @@ static NSArray<NSString *> *FLUsageKinds(void) {
   }
   NSDictionary *counts = report[@"summary"][kind];
   NSDate *began = report[@"began"];
+  NSString *unlisted = [report[@"listed"] boolValue]
+    ? @""
+    : @" What is installed has not been listed yet, so apps, extensions and programs that "
+      @"have never run are missing.";
   section.footer = [NSString
     stringWithFormat:@"%@ found, %@ never seen running. Counted since %@, with the device awake "
-                     @"for %@ of that time. A run of only a few milliseconds can go unnamed.",
+                     @"for %@ of that time. A run of only a few milliseconds can go unnamed.%@",
                      counts[@"total"] ?: @0, counts[@"never"] ?: @0,
                      [began isKindOfClass:[NSDate class]] ? FLFormatDay(began) : @"the start",
-                     FLFormatDuration([report[@"watched"] doubleValue])];
+                     FLFormatDuration([report[@"watched"] doubleValue]), unlisted];
   return @[ section ];
 }
 

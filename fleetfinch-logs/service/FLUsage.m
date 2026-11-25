@@ -1,8 +1,6 @@
 #import "FLUsage.h"
 
 #import <fcntl.h>
-#import <mach-o/fat.h>
-#import <mach-o/loader.h>
 #import <limits.h>
 #import <mach/mach_time.h>
 #import <stdlib.h>
@@ -11,17 +9,16 @@
 
 #import "FLCollect.h"
 #import "FLCommon.h"
+#import "FLInventory.h"
 #import "FLStatus.h"
 
 static const NSTimeInterval FLUsageSaveEvery = 300;
 static const NSUInteger FLUsageCommandLength = 300;
 static const NSUInteger FLUsageNamesKept = 8;
-static const NSUInteger FLUsageToolDepth = 3;
 static const NSUInteger FLUsageNameLimit = 16;
 static const size_t FLUsageScriptLine = 255;
 static const NSTimeInterval FLUsageInventoryFor = 600;
 static NSString *const FLUsageOthers = @"others";
-static NSString *const FLUsageStock = @"iOS";
 static NSString *const FLUsageUnnamed = @"(too short to name)";
 
 static FLUsageLedger *FLLedger;
@@ -75,24 +72,6 @@ NSString *FLBundledServiceIdentifier(NSString *path) {
 
 NSString *FLBundledServiceLabel(NSString *path) {
   return [FLBundledServiceIdentifier(path) stringByAppendingString:@" (XPC service)"];
-}
-
-static uint32_t FLFileMagic(NSString *path, mode_t *mode) {
-  struct stat info;
-  if (lstat(path.fileSystemRepresentation, &info) != 0 || !S_ISREG(info.st_mode)) {
-    return 0;
-  }
-  if (mode != NULL) {
-    *mode = info.st_mode;
-  }
-  int handle = open(path.fileSystemRepresentation, O_RDONLY);
-  if (handle < 0) {
-    return 0;
-  }
-  uint32_t magic = 0;
-  ssize_t count = read(handle, &magic, sizeof(magic));
-  close(handle);
-  return count == (ssize_t)sizeof(magic) ? magic : 0;
 }
 
 static NSString *FLScriptInterpreter(NSString *path) {
@@ -514,120 +493,6 @@ static NSString *FLDescribeCounts(NSDictionary<NSString *, NSNumber *> *counts) 
   return [parts componentsJoinedByString:@", "];
 }
 
-static NSDictionary<NSString *, NSString *> *FLPackageOwners(void) {
-  NSMutableDictionary *owners = [NSMutableDictionary new];
-  NSString *folder = @"/var/lib/dpkg/info";
-  NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:NULL];
-  for (NSString *name in names) {
-    if (![name.pathExtension isEqualToString:@"list"]) {
-      continue;
-    }
-    @autoreleasepool {
-      NSString *package = name.stringByDeletingPathExtension;
-      NSRange colon = [package rangeOfString:@":"];
-      if (colon.location != NSNotFound) {
-        package = [package substringToIndex:colon.location];
-      }
-      NSData *data = [NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:name]];
-      for (NSString *line in [FLStringFromData(data) componentsSeparatedByString:@"\n"]) {
-        if (line.length > 1) {
-          owners[line] = package;
-        }
-      }
-    }
-  }
-  return owners;
-}
-
-static NSString *FLOrigin(NSDictionary<NSString *, NSString *> *owners,
-                          NSArray<NSString *> *paths) {
-  for (NSString *path in paths) {
-    NSString *owner = path.length > 0 ? owners[path] : nil;
-    if (owner != nil) {
-      return owner;
-    }
-  }
-  BOOL placed = NO;
-  for (NSString *path in paths) {
-    if ([path hasPrefix:@"/var/"] || [path hasPrefix:@"/private/var/"]) {
-      return @"added later";
-    }
-    placed = placed || [path hasPrefix:@"/"];
-  }
-  return placed ? FLUsageStock : @"";
-}
-
-static BOOL FLIsProgram(NSString *path) {
-  mode_t mode = 0;
-  uint32_t magic = FLFileMagic(path, &mode);
-  if ((mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) {
-    return NO;
-  }
-  const char *bytes = (const char *)&magic;
-  return magic == MH_MAGIC || magic == MH_CIGAM || magic == MH_MAGIC_64 || magic == MH_CIGAM_64 ||
-         magic == FAT_MAGIC || magic == FAT_CIGAM || (bytes[0] == '#' && bytes[1] == '!');
-}
-
-static NSArray<NSString *> *FLToolPaths(void) {
-  NSMutableArray<NSString *> *paths = [NSMutableArray new];
-  NSFileManager *manager = [NSFileManager defaultManager];
-  NSArray *folders = @[
-    @"/bin", @"/sbin", @"/usr/bin", @"/usr/sbin", @"/usr/local/bin",
-    @"/System/Library/CoreServices"
-  ];
-  for (NSString *folder in folders) {
-    @autoreleasepool {
-      for (NSString *name in [manager contentsOfDirectoryAtPath:folder error:NULL]) {
-        NSString *path = [folder stringByAppendingPathComponent:name];
-        if (FLIsProgram(path)) {
-          [paths addObject:path];
-        }
-      }
-    }
-  }
-  NSString *helpers = @"/usr/libexec";
-  NSDirectoryEnumerator *walker = [manager enumeratorAtPath:helpers];
-  for (NSString *relative in walker) {
-    @autoreleasepool {
-      if (walker.level > FLUsageToolDepth) {
-        [walker skipDescendants];
-        continue;
-      }
-      NSString *path = [helpers stringByAppendingPathComponent:relative];
-      if (FLIsProgram(path)) {
-        [paths addObject:path];
-      }
-    }
-  }
-  return [paths sortedArrayUsingSelector:@selector(compare:)];
-}
-
-static NSArray<NSString *> *FLServiceBundles(void) {
-  NSMutableArray<NSString *> *bundles = [NSMutableArray new];
-  NSFileManager *manager = [NSFileManager defaultManager];
-  NSArray *roots = @[
-    @"/System/Library/Frameworks", @"/System/Library/PrivateFrameworks", @"/Applications",
-    @"/System/Library/CoreServices"
-  ];
-  for (NSString *root in roots) {
-    @autoreleasepool {
-      for (NSString *name in [manager contentsOfDirectoryAtPath:root error:NULL]) {
-        NSString *folder = [[root stringByAppendingPathComponent:name]
-          stringByAppendingPathComponent:@"XPCServices"];
-        if (access(folder.fileSystemRepresentation, F_OK) != 0) {
-          continue;
-        }
-        for (NSString *service in [manager contentsOfDirectoryAtPath:folder error:NULL]) {
-          if ([service.pathExtension isEqualToString:@"xpc"]) {
-            [bundles addObject:[folder stringByAppendingPathComponent:service]];
-          }
-        }
-      }
-    }
-  }
-  return [bundles sortedArrayUsingSelector:@selector(compare:)];
-}
-
 static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
                                 NSDictionary *details, NSDictionary *entry,
                                 NSUInteger running) {
@@ -658,39 +523,24 @@ static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
 static NSDictionary *FLUsageInventory(void) {
   static NSDictionary *kept;
   static NSDate *built;
-  if (kept != nil && -built.timeIntervalSinceNow < FLUsageInventoryFor) {
+  static NSDate *listed;
+  NSDate *written = FLStateWritten(FLInstalledState);
+  BOOL same = written == listed || [written isEqual:listed];
+  if (kept != nil && same && -built.timeIntervalSinceNow < FLUsageInventoryFor) {
     return kept;
   }
-  NSDictionary<NSString *, NSString *> *owners = FLPackageOwners();
-  NSMutableArray *apps = [NSMutableArray new];
-  for (NSDictionary *app in FLInstalledApps()) {
-    NSMutableDictionary *found = [app mutableCopy];
-    found[@"origin"] = FLOrigin(owners, @[ app[@"path"] ?: @"" ]);
-    [apps addObject:found];
+  NSDictionary *installed = written == nil ? @{} : FLReadState(FLInstalledState);
+  NSMutableDictionary *found = [NSMutableDictionary new];
+  for (NSString *key in @[ @"apps", @"bundles", @"tools" ]) {
+    found[key] = [installed[key] isKindOfClass:[NSArray class]] ? installed[key] : @[];
   }
-  NSMutableArray *bundles = [NSMutableArray new];
-  for (NSString *bundle in FLServiceBundles()) {
-    NSString *identifier = FLBundleInfo(bundle)[@"identifier"];
-    if (identifier.length > 0) {
-      [bundles addObject:@{
-        @"path" : bundle,
-        @"identifier" : identifier,
-        @"origin" : FLOrigin(owners, @[ bundle ]),
-      }];
-    }
-  }
-  NSMutableArray *tools = [NSMutableArray new];
-  for (NSString *path in FLToolPaths()) {
-    [tools addObject:@{@"path" : path, @"origin" : FLOrigin(owners, @[ path ])}];
-  }
-  kept = @{
-    @"owners" : owners,
-    @"apps" : apps,
-    @"definitions" : FLLaunchServices() ?: @[],
-    @"bundles" : bundles,
-    @"tools" : tools,
-  };
+  found[@"origins"] =
+    [installed[@"origins"] isKindOfClass:[NSDictionary class]] ? installed[@"origins"] : @{};
+  found[@"listed"] = @(installed.count > 0);
+  found[@"definitions"] = FLLaunchServices() ?: @[];
+  kept = found;
   built = [NSDate date];
+  listed = written;
   return kept;
 }
 
@@ -706,9 +556,26 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     }
   }
   NSDictionary *inventory = FLUsageInventory();
-  NSDictionary<NSString *, NSString *> *owners = inventory[@"owners"];
+  NSDictionary<NSString *, NSString *> *owners = inventory[@"origins"];
   NSMutableArray<NSDictionary *> *rows = [NSMutableArray new];
   NSMutableSet<NSString *> *listed = [NSMutableSet new];
+  NSMutableDictionary<NSString *, NSNumber *> *sizes = [NSMutableDictionary new];
+  for (NSDictionary *tool in inventory[@"tools"]) {
+    sizes[tool[@"path"]] = tool[@"bytes"];
+  }
+  NSMutableSet<NSString *> *bundled = [NSMutableSet new];
+  for (NSDictionary *bundle in inventory[@"bundles"]) {
+    if (bundle[@"program"] != nil) {
+      [bundled addObject:bundle[@"program"]];
+    }
+  }
+  NSMutableDictionary<NSString *, NSString *> *labelled = [NSMutableDictionary new];
+  for (NSString *key in entries) {
+    NSString *path = entries[key][@"path"];
+    if ([key hasPrefix:@"service:"] && path != nil && [bundled containsObject:path]) {
+      labelled[path] = key;
+    }
+  }
 
   for (NSDictionary *app in inventory[@"apps"]) {
     NSString *path = app[@"path"] ?: @"";
@@ -721,8 +588,12 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     NSString *note = [app[@"hidden"] boolValue]
       ? [NSString stringWithFormat:@"%@, hidden", app[@"kind"]]
       : app[@"kind"];
-    NSDictionary *details =
-      @{@"where" : path, @"origin" : app[@"origin"] ?: @"", @"note" : note ?: @""};
+    NSDictionary *details = @{
+      @"where" : path,
+      @"origin" : app[@"origin"] ?: @"",
+      @"note" : note ?: @"",
+      @"bytes" : app[@"bytes"] ?: @0,
+    };
     [rows addObject:FLUsageRow(@"app", identifier, app[@"name"], details, entries[key],
                                [running countForObject:key])];
   }
@@ -743,30 +614,42 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     if (file.length == 0 && entries[key] == nil && [family containsString:@"*"]) {
       continue;
     }
+    if (file.length == 0 && [bundled containsObject:program]) {
+      continue;
+    }
     [listed addObject:key];
     NSDictionary *details = @{
       @"where" : program,
       @"file" : file,
-      @"origin" : FLOrigin(owners, @[ file, program ]),
+      @"origin" : FLOriginOf(owners, @[ file, program ]),
       @"note" : FLServiceStarts(service) ?: @"",
+      @"bytes" : sizes[program] ?: @0,
     };
     [rows addObject:FLUsageRow(@"service", family, family, details, entries[key],
                                [running countForObject:key])];
   }
   for (NSDictionary *bundle in inventory[@"bundles"]) {
     NSString *identifier = bundle[@"identifier"];
+    NSString *program = bundle[@"program"] ?: @"";
     NSString *key = [@"service:" stringByAppendingString:identifier];
     if ([listed containsObject:key]) {
       continue;
     }
+    NSString *used = key;
+    NSString *other = labelled[program] ?: [@"program:" stringByAppendingString:program];
+    if (entries[key] == nil && entries[other] != nil) {
+      used = other;
+    }
     [listed addObject:key];
+    [listed addObject:used];
     NSDictionary *details = @{
       @"where" : bundle[@"path"],
-      @"origin" : bundle[@"origin"],
-      @"note" : @"an XPC service, started when a program that uses it asks",
+      @"origin" : bundle[@"origin"] ?: @"",
+      @"note" : bundle[@"note"] ?: @"",
+      @"bytes" : bundle[@"bytes"] ?: @0,
     };
-    [rows addObject:FLUsageRow(@"service", identifier, identifier, details, entries[key],
-                               [running countForObject:key])];
+    [rows addObject:FLUsageRow(@"service", identifier, identifier, details, entries[used],
+                               [running countForObject:used])];
   }
 
   for (NSDictionary *tool in inventory[@"tools"]) {
@@ -779,7 +662,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     if (covered || (entry == nil && [servicePrograms containsObject:path])) {
       continue;
     }
-    NSDictionary *details = @{@"where" : path, @"origin" : tool[@"origin"]};
+    NSDictionary *details =
+      @{@"where" : path, @"origin" : tool[@"origin"] ?: @"", @"bytes" : tool[@"bytes"] ?: @0};
     [rows addObject:FLUsageRow(@"program", path, path.lastPathComponent, details, entry,
                                [running countForObject:key])];
   }
@@ -807,7 +691,7 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
       note = @"not defined on disk";
     }
     NSDictionary *details =
-      @{@"where" : path, @"origin" : FLOrigin(owners, @[ path ]), @"note" : note};
+      @{@"where" : path, @"origin" : FLOriginOf(owners, @[ path ]), @"note" : note};
     [rows addObject:FLUsageRow(kind, name, entry[@"name"], details, entry,
                                [running countForObject:key])];
   }
@@ -835,6 +719,7 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
   report[@"boots"] = usage[@"boots"] ?: @0;
   report[@"rows"] = rows;
   report[@"summary"] = summary;
+  report[@"listed"] = inventory[@"listed"] ?: @NO;
   return report;
 }
 
@@ -861,26 +746,27 @@ static NSString *const FLUsageHeadings =
 static NSString *FLUsageLine(NSDictionary *row, BOOL ran) {
   NSString *kind = row[@"kind"];
   NSString *origin = row[@"origin"] ?: @"";
+  NSString *note = row[@"note"] ?: @"";
   NSString *where = FLEscape([row[@"where"] length] > 0 ? row[@"where"] : row[@"key"]);
+  uint64_t bytes = [row[@"bytes"] unsignedLongLongValue];
+  NSString *size = bytes > 0 ? FLFormatBytes(bytes) : @"";
   if ([kind isEqualToString:@"app"]) {
-    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", row[@"name"], row[@"key"],
-                                            FLUsageNumbers(row), row[@"note"] ?: @"", origin,
+    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"name"],
+                                            row[@"key"], FLUsageNumbers(row), note, size, origin,
                                             where]
-               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", row[@"name"], row[@"key"],
-                                            row[@"note"] ?: @"", origin, where];
+               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", row[@"name"], row[@"key"],
+                                            note, size, origin, where];
   }
   if ([kind isEqualToString:@"service"]) {
-    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"key"],
-                                            FLUsageNumbers(row), row[@"endings"] ?: @"",
-                                            row[@"note"] ?: @"", origin, where,
-                                            row[@"file"] ?: @""]
-               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", row[@"key"],
-                                            row[@"note"] ?: @"", origin, where,
-                                            row[@"file"] ?: @""];
+    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"key"],
+                                            FLUsageNumbers(row), row[@"endings"] ?: @"", note,
+                                            size, origin, where, row[@"file"] ?: @""]
+               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", row[@"key"], note, size,
+                                            origin, where, row[@"file"] ?: @""];
   }
-  return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@", where, FLUsageNumbers(row), origin,
-                                          FLEscape(row[@"command"] ?: @"")]
-             : [NSString stringWithFormat:@"%@\t%@", where, origin];
+  return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", where, FLUsageNumbers(row),
+                                          size, origin, FLEscape(row[@"command"] ?: @"")]
+             : [NSString stringWithFormat:@"%@\t%@\t%@", where, size, origin];
 }
 
 NSString *FLUsageText(NSDictionary *report, BOOL neverOnly) {
@@ -894,19 +780,27 @@ NSString *FLUsageText(NSDictionary *report, BOOL neverOnly) {
                      boots == 1 ? @"start" : @"starts"];
   [text appendString:@"Runs are counted as the kernel reports them. One that lasts only a few "
                      @"milliseconds while the processor is busy can end before it is named, "
-                     @"and is counted as too short to name.\n\n"];
+                     @"and is counted as too short to name.\n"];
+  if (![report[@"listed"] boolValue]) {
+    [text appendString:@"What is installed has not been listed yet, so apps, extensions and "
+                       @"programs that have never run are missing. The service lists it within "
+                       @"a few minutes of starting, and finchlog inventory lists it now.\n"];
+  }
+  [text appendString:@"\n"];
   NSArray<NSArray<NSString *> *> *kinds = @[
     @[
-      @"app", @"Apps", @"been opened", @"name\tidentifier\t{numbers}\tkind\tfrom\tpath",
-      @"name\tidentifier\tkind\tfrom\tpath"
+      @"app", @"Apps", @"been opened",
+      @"name\tidentifier\t{numbers}\tkind\tsize\tfrom\tpath",
+      @"name\tidentifier\tkind\tsize\tfrom\tpath"
     ],
     @[
       @"service", @"Services", @"run",
-      @"label\t{numbers}\tended with\tstarts\tfrom\tprogram\tdefined in",
-      @"label\tstarts\tfrom\tprogram\tdefined in"
+      @"label\t{numbers}\tended with\tstarts\tsize\tfrom\tprogram\tdefined in",
+      @"label\tstarts\tsize\tfrom\tprogram\tdefined in"
     ],
     @[
-      @"program", @"Programs", @"run", @"path\t{numbers}\tfrom\tlast command", @"path\tfrom"
+      @"program", @"Programs", @"run", @"path\t{numbers}\tsize\tfrom\tlast command",
+      @"path\tsize\tfrom"
     ],
   ];
   NSDictionary *summary = report[@"summary"];

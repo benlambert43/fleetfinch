@@ -23,6 +23,8 @@ static NSString *FLSnapshotTitle(NSString *kind) {
     @"sysctl" : @"Kernel Settings",
     @"registry" : @"Hardware Registry",
     @"usage" : @"What Has Run",
+    @"inventory" : @"What Is Installed",
+    @"dependencies" : @"What Depends on What",
   };
   return titles[kind] ?: kind.capitalizedString;
 }

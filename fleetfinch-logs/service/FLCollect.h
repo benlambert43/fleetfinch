@@ -4,8 +4,10 @@ NSArray<NSString *> *FLCollectKinds(void);
 NSString *FLCollectTitle(NSString *kind);
 NSString *FLCollect(NSString *kind);
 BOOL FLCollectPieces(NSString *kind, void (^write)(NSString *piece));
+NSString *FLSnapshotHeading(NSString *kind, NSString *why, NSDate *taken);
 
 NSString *FLDescribeValue(id value);
+void FLEachLaunchDefinition(void (^visit)(NSDictionary *service, NSDictionary *plist));
 NSArray<NSDictionary *> *FLLaunchServices(void);
 NSDictionary<NSString *, NSDictionary *> *FLLaunchJobs(void);
 NSArray<NSDictionary *> *FLServiceTable(NSDictionary<NSString *, NSDictionary *> *jobs,

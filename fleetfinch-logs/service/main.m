@@ -1,11 +1,14 @@
 #import <Foundation/Foundation.h>
 #import <notify.h>
+#import <sys/resource.h>
 #import <sys/utsname.h>
 
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLDaemon.h"
+#import "FLDepends.h"
 #import "FLDump.h"
+#import "FLInventory.h"
 #import "FLReader.h"
 #import "FLSettings.h"
 #import "FLStatus.h"
@@ -16,6 +19,9 @@
 static NSString *const FLTrailer = @"@@finchlog";
 static const NSTimeInterval FLFollowReport = 10;
 static const int64_t FLUsageWait = 5;
+static const int FLHelperNiceness = 10;
+static NSString *const FLInventorySnapshot = @"inventory";
+static NSString *const FLDependenciesSnapshot = @"dependencies";
 
 static void FLPrint(NSString *text) {
   NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
@@ -55,6 +61,14 @@ static int FLShowUsage(void) {
           @"  finchlog collect [KIND]          gather one kind of information right now\n"
           @"  finchlog usage [--never]         what has run since Finch Logs began counting,\n"
           @"                                   and what never has\n"
+          @"  finchlog inventory [KIND] [--fresh]\n"
+          @"                                   everything installed, with its size and what it\n"
+          @"                                   offers; KIND is apps, extensions, services, xpc,\n"
+          @"                                   frameworks, bundles, programs, libraries or\n"
+          @"                                   storage, and --fresh lists it all again first\n"
+          @"  finchlog depends [NAME] [--fresh]\n"
+          @"                                   what NAME links, opens by name and names, and what\n"
+          @"                                   does the same to it; with no NAME, all of it\n"
           @"  finchlog snapshot | import | maintain | reload\n"
           @"                                   ask the service to do that now\n"
           @"  finchlog daemon                  run the service (launchd does this)\n"
@@ -269,13 +283,113 @@ static int FLDumpStore(NSArray<NSString *> *arguments) {
   return FLWriteDump(STDOUT_FILENO, newerThan, [arguments containsObject:@"--gzip"]) ? 0 : 1;
 }
 
+static NSString *FLFirstWord(NSArray<NSString *> *arguments) {
+  return arguments.count > 0 && ![arguments[0] hasPrefix:@"--"] ? arguments[0] : nil;
+}
+
+static NSDictionary *FLListAgain(NSDictionary **dependencies, BOOL *saved) {
+  NSDictionary *inventory = FLGatherInventory();
+  BOOL root = getuid() == 0;
+  *saved = !root || FLSaveInventory(inventory);
+  *dependencies = FLGatherDependencies(inventory, FLReadState(FLUsageState));
+  if (root && *saved) {
+    *saved = FLSaveDependencies(*dependencies) && FLSaveInventory(inventory);
+  }
+  return inventory;
+}
+
+static BOOL FLSaveText(NSString *kind, NSString *why, NSString *text) {
+  NSString *heading = FLSnapshotHeading(kind, why, [NSDate date]);
+  return [[FLStore shared] saveSnapshot:kind
+                                 pieces:^BOOL(void (^write)(NSString *piece)) {
+                                   write(heading);
+                                   write(text);
+                                   return YES;
+                                 }] != nil;
+}
+
+static int FLShowInventory(NSArray<NSString *> *arguments) {
+  BOOL save = [arguments containsObject:@"--save"];
+  BOOL fresh = save || [arguments containsObject:@"--fresh"];
+  NSString *word = FLFirstWord(arguments);
+  NSString *kind = word == nil ? nil : FLInventoryKindNamed(word);
+  if (word != nil && kind == nil) {
+    fprintf(stderr, "finchlog: there is no kind of installed thing called %s\n",
+            word.UTF8String);
+    return 64;
+  }
+  if (save) {
+    setpriority(PRIO_PROCESS, 0, FLHelperNiceness);
+    setiopolicy_np(IOPOL_TYPE_DISK, IOPOL_SCOPE_PROCESS, IOPOL_UTILITY);
+  }
+  NSDictionary *inventory = fresh ? nil : FLReadState(FLInventoryState);
+  NSDictionary *dependencies = nil;
+  if (inventory.count == 0) {
+    BOOL saved = NO;
+    inventory = FLListAgain(&dependencies, &saved);
+    if (!saved) {
+      fprintf(stderr, "finchlog: the list of what is installed could not be saved\n");
+      return 1;
+    }
+  }
+  if (!save) {
+    FLPrint(FLInventoryText(inventory, kind));
+    return 0;
+  }
+  if ([arguments containsObject:@"--snapshot"]) {
+    NSString *why = FLOption(arguments, @"--reason") ?: @"it was asked for";
+    if (!FLSaveText(FLInventorySnapshot, why, FLInventoryText(inventory, nil)) ||
+        !FLSaveText(FLDependenciesSnapshot, why,
+                    FLDependenciesText(dependencies, inventory))) {
+      fprintf(stderr, "finchlog: the snapshots of what is installed could not be saved\n");
+      return 1;
+    }
+  }
+  FLPrint([NSString stringWithFormat:@"%@\n%@\n", FLInventorySummary(inventory),
+                                     FLDependenciesSummary(dependencies)]);
+  return 0;
+}
+
+static int FLShowDepends(NSArray<NSString *> *arguments) {
+  NSString *name = FLFirstWord(arguments);
+  NSDictionary *inventory = FLReadState(FLInventoryState);
+  NSDictionary *dependencies = FLReadState(FLDependenciesState);
+  if ([arguments containsObject:@"--fresh"] || inventory.count == 0 ||
+      dependencies.count == 0) {
+    BOOL saved = NO;
+    inventory = FLListAgain(&dependencies, &saved);
+    if (!saved) {
+      fprintf(stderr, "finchlog: what depends on what could not be saved\n");
+      return 1;
+    }
+  }
+  if (name == nil) {
+    FLPrint(FLDependenciesText(dependencies, inventory));
+    return 0;
+  }
+  NSString *text = FLDependsText(dependencies, inventory, name, FLCurrentUsage());
+  if (text == nil) {
+    fprintf(stderr, "finchlog: nothing installed is called %s\n", name.UTF8String);
+    return 1;
+  }
+  FLPrint(text);
+  return 0;
+}
+
 static int FLRunCollect(NSArray<NSString *> *arguments) {
   NSString *kind = arguments.count > 0 ? arguments[0] : nil;
   if (kind == nil || [kind isEqualToString:@"list"]) {
-    for (NSString *name in FLCollectKinds()) {
+    NSArray<NSString *> *listed = @[ FLInventorySnapshot, FLDependenciesSnapshot ];
+    for (NSString *name in [FLCollectKinds() arrayByAddingObjectsFromArray:listed]) {
       FLPrint([NSString stringWithFormat:@"%@\t%@\n", name, FLCollectTitle(name)]);
     }
     return 0;
+  }
+  if ([kind isEqualToString:FLInventorySnapshot]) {
+    return FLShowInventory(@[ @"--fresh" ]);
+  }
+  if ([kind isEqualToString:FLDependenciesSnapshot]) {
+    return FLShowDepends(@[ @"--fresh" ]);
   }
   NSString *text = FLCollect(kind);
   if (text == nil) {
@@ -361,6 +475,12 @@ int main(int argc, char **argv) {
     }
     if ([command isEqualToString:@"usage"]) {
       return FLPrintUsage(arguments);
+    }
+    if ([command isEqualToString:@"inventory"]) {
+      return FLShowInventory(arguments);
+    }
+    if ([command isEqualToString:@"depends"]) {
+      return FLShowDepends(arguments);
     }
     if ([command isEqualToString:@"snapshot"]) {
       return FLAsk(FLCommandSnapshot, @"Asked the service to take every snapshot now.");

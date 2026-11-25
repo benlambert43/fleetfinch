@@ -31,6 +31,8 @@ export const finchSnapshotTitles: Record<string, string> = {
   sysctl: "Kernel Settings",
   registry: "Hardware Registry",
   usage: "What Has Run",
+  inventory: "What Is Installed",
+  dependencies: "What Depends on What",
 };
 
 export interface FinchLine {
