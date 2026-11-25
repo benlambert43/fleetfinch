@@ -2,6 +2,8 @@
 
 NSDictionary *FLReadState(NSString *name);
 void FLWriteState(NSString *name, NSDictionary *state);
+BOOL FLWriteCompactState(NSString *name, NSDictionary *state);
+NSDate *FLStateWritten(NSString *name);
 
 NSDictionary *FLServiceStatus(void);
 NSDictionary *FLServiceLive(void);

@@ -66,6 +66,8 @@ NSString *FLUserName(unsigned user);
 
 NSArray<FLProcess *> *FLProcessList(BOOL detailed);
 FLProcess *FLProcessWithIdentifier(int pid);
+FLProcess *FLProcessSketch(int pid, BOOL arguments);
+NSNumber *FLProcessorSecondsSpent(int pid);
 
 NSDictionary<NSString *, NSNumber *> *FLProcessorTicks(void);
 NSArray<NSDictionary<NSString *, NSNumber *> *> *FLProcessorCoreTicks(void);

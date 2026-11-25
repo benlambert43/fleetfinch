@@ -42,6 +42,12 @@ export function deviceHref(address: string): string {
   return `${devicesHref}/${encodeURIComponent(address)}`;
 }
 
+const backupsSegment = "backups";
+
+export function deviceBackupsHref(address: string): string {
+  return `${deviceHref(address)}/${backupsSegment}`;
+}
+
 export function isDevicesHash(hash: string): boolean {
   return hash === devicesHref || hash.startsWith(`${devicesHref}/`);
 }
@@ -53,20 +59,37 @@ function subscribeToHash(listener: () => void): () => void {
   };
 }
 
-function shownAddress(): string | null {
+function shownSegments(): string[] {
   const { hash } = window.location;
   if (!hash.startsWith(`${devicesHref}/`)) {
+    return [];
+  }
+  return hash.slice(devicesHref.length + 1).split("/");
+}
+
+function shownAddress(): string | null {
+  const [address] = shownSegments();
+  if (address === undefined) {
     return null;
   }
   try {
-    return decodeURIComponent(hash.slice(devicesHref.length + 1));
+    return decodeURIComponent(address);
   } catch {
     return null;
   }
 }
 
+function showingBackups(): boolean {
+  const [, page, ...rest] = shownSegments();
+  return page === backupsSegment && rest.length === 0;
+}
+
 export function useShownDeviceAddress(): string | null {
   return useSyncExternalStore(subscribeToHash, shownAddress);
+}
+
+export function useShowingDeviceBackups(): boolean {
+  return useSyncExternalStore(subscribeToHash, showingBackups);
 }
 
 export function showDevices(): void {

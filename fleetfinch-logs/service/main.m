@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <notify.h>
 #import <sys/utsname.h>
 
 #import "FLCollect.h"
@@ -10,9 +11,11 @@
 #import "FLStatus.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
+#import "FLUsage.h"
 
 static NSString *const FLTrailer = @"@@finchlog";
 static const NSTimeInterval FLFollowReport = 10;
+static const int64_t FLUsageWait = 5;
 
 static void FLPrint(NSString *text) {
   NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
@@ -50,6 +53,8 @@ static int FLShowUsage(void) {
           @"  finchlog dump [--hours H] [--gzip]\n"
           @"                                   every log as a tar archive on standard output\n"
           @"  finchlog collect [KIND]          gather one kind of information right now\n"
+          @"  finchlog usage [--never]         what has run since Finch Logs began counting,\n"
+          @"                                   and what never has\n"
           @"  finchlog snapshot | import | maintain | reload\n"
           @"                                   ask the service to do that now\n"
           @"  finchlog daemon                  run the service (launchd does this)\n"
@@ -281,6 +286,27 @@ static int FLRunCollect(NSArray<NSString *> *arguments) {
   return 0;
 }
 
+static int FLPrintUsage(NSArray<NSString *> *arguments) {
+  if (FLServiceRunning(FLServiceStatus())) {
+    dispatch_semaphore_t saved = dispatch_semaphore_create(0);
+    int token = 0;
+    notify_register_dispatch(FLNoticeUsage.UTF8String, &token,
+                             dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(int fired) {
+                               dispatch_semaphore_signal(saved);
+                             });
+    FLPostCommand(FLCommandUsage);
+    dispatch_semaphore_wait(saved, dispatch_time(DISPATCH_TIME_NOW, FLUsageWait * NSEC_PER_SEC));
+    notify_cancel(token);
+  }
+  NSDictionary *usage = FLCurrentUsage();
+  if (usage.count == 0) {
+    fprintf(stderr, "finchlog: nothing has been counted yet; the service has not run\n");
+    return 1;
+  }
+  FLPrint(FLUsageText(FLUsageReport(usage), [arguments containsObject:@"--never"]));
+  return 0;
+}
+
 static int FLAsk(NSString *command, NSString *said) {
   NSDictionary *status = FLServiceStatus();
   if (!FLServiceRunning(status)) {
@@ -332,6 +358,9 @@ int main(int argc, char **argv) {
     }
     if ([command isEqualToString:@"collect"]) {
       return FLRunCollect(arguments);
+    }
+    if ([command isEqualToString:@"usage"]) {
+      return FLPrintUsage(arguments);
     }
     if ([command isEqualToString:@"snapshot"]) {
       return FLAsk(FLCommandSnapshot, @"Asked the service to take every snapshot now.");

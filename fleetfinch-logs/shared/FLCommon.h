@@ -10,7 +10,11 @@ extern NSString *const FLCommandImport;
 extern NSString *const FLCommandMaintain;
 extern NSString *const FLCommandSettings;
 extern NSString *const FLCommandWatch;
+extern NSString *const FLCommandUsage;
 extern NSString *const FLNoticeChanged;
+extern NSString *const FLNoticeUsage;
+extern NSString *const FLUsageState;
+extern NSString *const FLUsageReportState;
 extern NSString *const FLNoticeSleeping;
 
 typedef NS_ENUM(NSInteger, FLLevel) {

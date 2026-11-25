@@ -12,6 +12,7 @@
 
 #import "FLCommon.h"
 #import "FLSystemInfo.h"
+#import "FLUsage.h"
 
 static const NSUInteger FLValueDepth = 6;
 static const NSUInteger FLDataPreview = 48;
@@ -979,7 +980,8 @@ static NSString *FLCollectKernelLog(void) {
 NSArray<NSString *> *FLCollectKinds(void) {
   return @[
     @"environment", @"device", @"processes", @"services", @"apps", @"packages",
-    @"volumes", @"network", @"power", @"kernel", @"extensions", @"sysctl", @"registry"
+    @"volumes", @"network", @"power", @"kernel", @"extensions", @"sysctl", @"registry",
+    @"usage"
   ];
 }
 
@@ -998,6 +1000,7 @@ NSString *FLCollectTitle(NSString *kind) {
     @"extensions" : @"Loaded kernel extensions",
     @"sysctl" : @"Kernel settings and counters",
     @"registry" : @"Hardware in the I/O Registry",
+    @"usage" : @"What has run and what never has",
   };
   return titles[kind] ?: kind;
 }
@@ -1042,6 +1045,9 @@ NSString *FLCollect(NSString *kind) {
     }
     if ([kind isEqualToString:@"registry"]) {
       return FLCollectRegistry();
+    }
+    if ([kind isEqualToString:@"usage"]) {
+      return FLUsageText(FLUsageReport(FLCurrentUsage()), NO);
     }
     return nil;
   }

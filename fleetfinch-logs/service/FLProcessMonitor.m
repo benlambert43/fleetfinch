@@ -3,7 +3,9 @@
 #import <sys/stat.h>
 
 #import "FLCollect.h"
+#import "FLProcessWatcher.h"
 #import "FLStatus.h"
+#import "FLStore.h"
 #import "FLSystemInfo.h"
 
 static NSString *const FLSpringBoardServices =
@@ -14,6 +16,42 @@ static const NSUInteger FLTopCount = 5;
 static const NSUInteger FLKernelTail = 160;
 static const NSUInteger FLKernelAnchor = 64;
 static NSString *const FLAppsState = @"apps";
+static const NSTimeInterval FLForkGrace = 1.0;
+static const NSTimeInterval FLExecQuiet = 0.25;
+static const NSTimeInterval FLJobsFresh = 1.0;
+static const NSTimeInterval FLEndedKept = 120;
+static const NSTimeInterval FLSettleSoonest = 0.05;
+static NSString *const FLLaunchProxy = @"xpcproxy";
+
+static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *source,
+                     NSString *format, ...) NS_FORMAT_FUNCTION(5, 6);
+
+static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *source,
+                     NSString *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  NSString *message = [[NSString alloc] initWithFormat:format arguments:arguments];
+  va_end(arguments);
+  [[FLStore shared] log:stream
+                  level:level
+                 source:source
+                message:message
+                   date:date ?: [NSDate date]];
+}
+
+@interface FLPendingProcess : NSObject
+
+@property(nonatomic, strong) FLProcess *process;
+@property(nonatomic, strong) NSMutableArray<FLProcess *> *earlier;
+@property(nonatomic, strong) NSMutableArray<NSDate *> *changes;
+@property(nonatomic, strong) NSDate *deadline;
+@property(nonatomic) BOOL clone;
+@property(nonatomic) BOOL lost;
+
+@end
+
+@implementation FLPendingProcess
+@end
 
 @implementation FLKernelMonitor {
   NSString *_previous;
@@ -102,6 +140,12 @@ static NSString *const FLAppsState = @"apps";
   NSString *_front;
   NSDate *_sampled;
   BOOL _primed;
+  NSMutableDictionary<NSString *, FLPendingProcess *> *_pending;
+  NSMutableDictionary<NSNumber *, NSDictionary *> *_ended;
+  FLProcessWatcher *_watcher;
+  dispatch_queue_t _queue;
+  BOOL _settling;
+  BOOL _jobsStale;
 }
 
 - (instancetype)init {
@@ -112,6 +156,8 @@ static NSString *const FLAppsState = @"apps";
     _memory = [NSMutableDictionary new];
     _jobLabels = @{};
     _live = @[];
+    _pending = [NSMutableDictionary new];
+    _ended = [NSMutableDictionary new];
   }
   return self;
 }
@@ -144,13 +190,7 @@ static NSString *const FLAppsState = @"apps";
 }
 
 - (NSString *)bundledServiceLabel:(FLProcess *)process {
-  NSRange bundle = [process.path rangeOfString:@".xpc/"];
-  if (bundle.location == NSNotFound) {
-    return nil;
-  }
-  NSString *folder = [process.path substringToIndex:bundle.location + 4];
-  NSString *identifier = FLBundleInfo(folder)[@"identifier"];
-  return identifier.length > 0 ? [identifier stringByAppendingString:@" (XPC service)"] : nil;
+  return FLBundledServiceLabel(process.path);
 }
 
 - (NSString *)serviceLabelForProcess:(int)pid {
@@ -163,56 +203,101 @@ static NSString *const FLAppsState = @"apps";
       return process;
     }
   }
+  for (FLPendingProcess *pending in _pending.allValues) {
+    if (pending.process.pid == pid) {
+      return pending.process;
+    }
+  }
   return nil;
 }
 
-- (void)started:(FLProcess *)process {
-  FLProcess *parent = [self known:process.parent];
-  NSString *parentName = process.parent == 1 ? @"launchd"
-                                             : ([parent displayName] ?: @"a process");
-  NSString *label = _jobLabels[@(process.pid)];
+- (NSString *)starterOf:(FLProcess *)process {
+  if (process.parent == 1) {
+    return @"launchd";
+  }
+  if (process.parent == 0) {
+    return @"the kernel";
+  }
+  return [[self known:process.parent] displayName] ?: @"a process";
+}
+
+- (NSString *)nameOf:(FLProcess *)process {
+  NSString *script = FLScriptOf(process);
+  return script.length > 0 ? script.lastPathComponent : [process displayName];
+}
+
+- (NSString *)sourceOf:(FLProcess *)process {
+  return process.name.length > 0 ? process.name : [process displayName];
+}
+
+- (void)started:(FLProcess *)process
+          label:(NSString *)label
+          chain:(NSArray<FLProcess *> *)chain
+             at:(NSDate *)when {
   NSString *service = label == nil ? @"" : [NSString stringWithFormat:@" for %@", label];
-  FLNote(@"process", FLLevelNotice, process.name,
-         @"started pid %d by %@ (pid %d)%@ as %@: %@", process.pid, parentName,
-         process.parent, service, FLUserName(process.user), [process commandLine]);
+  NSMutableArray<NSString *> *through = [NSMutableArray new];
+  for (FLProcess *earlier in chain) {
+    [through addObject:[self nameOf:earlier]];
+  }
+  NSString *way = through.count == 0
+    ? @""
+    : [NSString stringWithFormat:@" by way of %@", [through componentsJoinedByString:@" and "]];
+  FLNoteAt(when, @"process", FLLevelNotice, [self sourceOf:process],
+           @"started pid %d by %@ (pid %d)%@%@ as %@: %@", process.pid, [self starterOf:process],
+           process.parent, service, way, FLUserName(process.user), [process commandLine]);
   if (process.parent == 1 && label == nil) {
-    FLNote(@"service", FLLevelNotice, [self bundledServiceLabel:process] ?: process.name,
-           @"started as pid %d running %@", process.pid, [process commandLine]);
+    FLNoteAt(when, @"service", FLLevelNotice,
+             [self bundledServiceLabel:process] ?: [self sourceOf:process],
+             @"started as pid %d running %@", process.pid, [process commandLine]);
   }
   NSString *bundle = [process appBundlePath];
   if (bundle != nil) {
     NSDictionary *info = FLBundleInfo(bundle);
-    FLNote(@"app", FLLevelNotice, info[@"name"] ?: process.name,
-           @"opened as pid %d (%@ %@) from %@", process.pid, info[@"identifier"] ?: @"",
-           info[@"version"] ?: @"", bundle);
+    FLNoteAt(when, @"app", FLLevelNotice, info[@"name"] ?: [self sourceOf:process],
+             @"opened as pid %d (%@ %@) from %@", process.pid, info[@"identifier"] ?: @"",
+             info[@"version"] ?: @"", bundle);
   }
 }
 
-- (void)exited:(FLProcess *)process labels:(NSDictionary<NSNumber *, NSString *> *)labels {
+- (void)exited:(FLProcess *)process
+        labels:(NSDictionary<NSNumber *, NSString *> *)labels
+            at:(NSDate *)when {
   NSString *identity = [process identity];
-  NSTimeInterval lived = -process.started.timeIntervalSinceNow;
+  NSTimeInterval lived = MAX(0, [when timeIntervalSinceDate:process.started]);
   NSNumber *processor = _processor[identity];
   NSNumber *memory = _memory[identity];
-  NSString *usage = processor == nil
-    ? @""
-    : [NSString stringWithFormat:@", having used %.2fs of processor and %@ of memory when "
-                                 @"last seen",
-                                 processor.doubleValue,
-                                 FLFormatBytes(memory.unsignedLongLongValue)];
-  FLNote(@"process", FLLevelNotice, process.name, @"exited pid %d after %@%@", process.pid,
-         FLFormatDuration(lived), usage);
+  NSString *usage = @"";
+  if (processor != nil && memory != nil) {
+    usage = [NSString stringWithFormat:@", having used %.2fs of processor and %@ of memory when "
+                                       @"last seen",
+                                       processor.doubleValue,
+                                       FLFormatBytes(memory.unsignedLongLongValue)];
+  } else if (processor != nil) {
+    usage = [NSString stringWithFormat:@", having used %.2fs of processor",
+                                       processor.doubleValue];
+  }
+  FLNoteAt(when, @"process", FLLevelNotice, [self sourceOf:process], @"exited pid %d after %@%@",
+           process.pid, FLFormatDuration(lived), usage);
   if (process.parent == 1 && labels[@(process.pid)] == nil) {
-    FLNote(@"service", FLLevelNotice, [self bundledServiceLabel:process] ?: process.name,
-           @"stopped (pid %d) after %@", process.pid, FLFormatDuration(lived));
+    FLNoteAt(when, @"service", FLLevelNotice,
+             [self bundledServiceLabel:process] ?: [self sourceOf:process],
+             @"stopped (pid %d) after %@", process.pid, FLFormatDuration(lived));
   }
   NSString *bundle = [process appBundlePath];
   if (bundle != nil) {
     NSDictionary *info = FLBundleInfo(bundle);
-    FLNote(@"app", FLLevelNotice, info[@"name"] ?: process.name, @"closed (pid %d) after %@",
-           process.pid, FLFormatDuration(lived));
+    FLNoteAt(when, @"app", FLLevelNotice, info[@"name"] ?: [self sourceOf:process],
+             @"closed (pid %d) after %@", process.pid, FLFormatDuration(lived));
   }
   [_processor removeObjectForKey:identity];
   [_memory removeObjectForKey:identity];
+  for (NSNumber *pid in _ended.allKeys) {
+    NSDate *at = _ended[pid][@"at"];
+    if ([when timeIntervalSinceDate:at] > FLEndedKept) {
+      [_ended removeObjectForKey:pid];
+    }
+  }
+  _ended[@(process.pid)] = @{@"process" : process, @"at" : when};
 }
 
 - (NSString *)commandOfJob:(NSDictionary *)job process:(FLProcess *)process {
@@ -235,10 +320,16 @@ static NSString *const FLAppsState = @"apps";
       process = candidate;
     }
   }
+  NSDictionary *record = _ended[@(pid)];
+  NSDate *ended = record[@"at"] ?: [NSDate date];
+  if (process == nil) {
+    process = record[@"process"];
+  }
   NSString *lived = process == nil
     ? @""
-    : [NSString stringWithFormat:@" after %@", FLFormatDuration(-process.started
-                                                                    .timeIntervalSinceNow)];
+    : [NSString stringWithFormat:@" after %@",
+                                 FLFormatDuration(MAX(0, [ended timeIntervalSinceDate:process
+                                                                                    .started]))];
   NSString *ending = @"";
   FLLevel level = FLLevelNotice;
   if (removed) {
@@ -248,6 +339,7 @@ static NSString *const FLAppsState = @"apps";
     if (status.integerValue != 0) {
       level = FLLevelWarning;
     }
+    [self.ledger service:label endedWith:FLDescribeExit(status.integerValue)];
   }
   FLNote(@"service", level, label, @"stopped (pid %d)%@%@", pid, lived, ending);
 }
@@ -371,6 +463,9 @@ static NSString *const FLAppsState = @"apps";
   NSMutableArray<FLProcess *> *started = [NSMutableArray new];
   for (FLProcess *process in listed) {
     NSString *identity = [process identity];
+    if (_pending[identity] != nil) {
+      continue;
+    }
     FLProcess *known = _known[identity];
     if (known != nil) {
       current[identity] = known;
@@ -398,15 +493,27 @@ static NSString *const FLAppsState = @"apps";
     jobsChanged = [self loadJobs];
   }
   _known = current;
+  for (FLProcess *process in started) {
+    [self.ledger began:process
+                 label:_jobLabels[@(process.pid)] ?: FLBundledServiceIdentifier(process.path)
+               starter:[self starterOf:process]];
+  }
+  for (FLProcess *process in exited) {
+    NSString *identity = [process identity];
+    [self.ledger ended:process processor:_processor[identity] memory:_memory[identity]];
+  }
+  if (!_primed) {
+    [self.ledger keepOnly:[NSSet setWithArray:current.allKeys]];
+  }
   if (_primed) {
     NSSortDescriptor *byStart = [NSSortDescriptor sortDescriptorWithKey:@"started"
                                                               ascending:YES];
     for (FLProcess *process in [started sortedArrayUsingDescriptors:@[ byStart ]]) {
-      [self started:process];
+      [self started:process label:_jobLabels[@(process.pid)] chain:nil at:process.started];
     }
     _known = previous;
     for (FLProcess *process in exited) {
-      [self exited:process labels:labelsBefore];
+      [self exited:process labels:labelsBefore at:[NSDate date]];
     }
     _known = current;
     if (jobsChanged && jobsBefore != nil) {
@@ -415,6 +522,271 @@ static NSString *const FLAppsState = @"apps";
   }
   _primed = YES;
   [self checkFront];
+}
+
+- (void)refreshJobs {
+  NSDictionary<NSString *, NSDictionary *> *before = _jobs;
+  if ([self loadJobs] && before != nil && _primed) {
+    [self compareJobs:before exited:@[]];
+  }
+  _jobsStale = NO;
+}
+
+- (NSString *)labelByProgram:(FLProcess *)process chain:(NSArray<FLProcess *> *)chain {
+  NSMutableSet<NSString *> *paths = [NSMutableSet new];
+  for (FLProcess *image in [chain ?: @[] arrayByAddingObject:process]) {
+    if (image.path.length > 0) {
+      [paths addObject:image.path];
+    }
+    NSString *script = FLScriptOf(image);
+    if (script.length > 0) {
+      [paths addObject:script];
+    }
+  }
+  NSString *found = nil;
+  for (NSString *label in _jobs) {
+    NSString *program = _jobs[label][@"program"];
+    if (program.length == 0 || ![paths containsObject:program]) {
+      continue;
+    }
+    if (found != nil) {
+      return nil;
+    }
+    found = label;
+  }
+  return found;
+}
+
+- (NSString *)labelFor:(FLProcess *)process
+                 chain:(NSArray<FLProcess *> *)chain
+                 since:(NSDate *)began {
+  NSString *label = _jobLabels[@(process.pid)];
+  if (label != nil || process.parent != 1) {
+    return label;
+  }
+  for (FLProcess *image in chain) {
+    if (image.arguments.count > 1 &&
+        [image.path.lastPathComponent isEqualToString:FLLaunchProxy]) {
+      _jobsStale = YES;
+      return image.arguments[1];
+    }
+  }
+  if (_jobsLoaded == nil || [_jobsLoaded compare:began] != NSOrderedDescending) {
+    [self refreshJobs];
+    label = _jobLabels[@(process.pid)];
+  }
+  return label ?: [self labelByProgram:process chain:chain];
+}
+
+- (void)missed:(FLProcess *)process at:(NSDate *)when {
+  NSString *starter = [self starterOf:process];
+  FLNoteAt(when, @"process", FLLevelInfo, starter,
+           @"started pid %d, which ran a program and exited before it could be named",
+           process.pid);
+  [self.ledger missed:starter at:when];
+}
+
+- (void)settled:(FLPendingProcess *)pending at:(NSDate *)now {
+  FLProcess *process = pending.process;
+  NSString *starter = [self starterOf:process];
+  NSDate *began = process.started ?: now;
+  for (NSUInteger index = 0; index < pending.earlier.count; index++) {
+    [self.ledger passed:pending.earlier[index]
+                starter:starter
+                   from:began
+                     to:pending.changes[index]];
+    began = pending.changes[index];
+  }
+  NSString *label = [self labelFor:process chain:pending.earlier since:began];
+  _known[[process identity]] = process;
+  [self.ledger began:process
+               label:label ?: FLBundledServiceIdentifier(process.path)
+             starter:starter
+                from:began
+                  at:now];
+  [self started:process label:label chain:pending.earlier at:began];
+}
+
+- (void)changed:(FLProcess *)before into:(FLProcess *)process at:(NSDate *)when {
+  NSString *identity = [before identity];
+  _known[identity] = process;
+  if ([before.path isEqualToString:process.path] &&
+      [[before commandLine] isEqualToString:[process commandLine]]) {
+    return;
+  }
+  double spent = [_processor[identity] doubleValue];
+  [self.ledger ended:before processor:_processor[identity] memory:_memory[identity] at:when];
+  [self.ledger began:process
+               label:_jobLabels[@(process.pid)] ?: FLBundledServiceIdentifier(process.path)
+             starter:[self starterOf:process]
+                from:when
+                  at:when];
+  [self.ledger rebase:process processor:spent];
+  FLNoteAt(when, @"process", FLLevelNotice, [self sourceOf:process],
+           @"pid %d now runs %@, having started as %@", process.pid, [process commandLine],
+           [self nameOf:before]);
+}
+
+- (void)await:(FLProcess *)process copy:(BOOL)copy until:(NSDate *)deadline {
+  FLPendingProcess *pending = [FLPendingProcess new];
+  pending.process = process;
+  pending.clone = copy;
+  pending.earlier = [NSMutableArray new];
+  pending.changes = [NSMutableArray new];
+  pending.deadline = deadline;
+  _pending[[process identity]] = pending;
+}
+
+- (void)appeared:(FLProcessEvent *)event {
+  FLProcess *process = event.process;
+  NSString *identity = [process identity];
+  if (_known[identity] != nil || _pending[identity] != nil) {
+    return;
+  }
+  BOOL copy = event.clone;
+  if (!event.named) {
+    if (process.name.length == 0) {
+      [self missed:process at:event.at];
+      return;
+    }
+    copy = [process.name isEqualToString:[self known:process.parent].name];
+  }
+  [self await:process
+         copy:copy
+        until:[event.at dateByAddingTimeInterval:copy ? FLForkGrace : FLExecQuiet]];
+}
+
+- (void)became:(FLProcessEvent *)event {
+  FLProcess *process = event.process;
+  NSString *identity = [process identity];
+  FLPendingProcess *pending = _pending[identity];
+  FLProcess *known = _known[identity];
+  if (!event.named) {
+    pending.lost = YES;
+    if (pending == nil && known != nil) {
+      [self missed:known at:event.at];
+    }
+    return;
+  }
+  NSDate *deadline = [event.at dateByAddingTimeInterval:FLExecQuiet];
+  if (pending != nil) {
+    if (!pending.clone) {
+      [pending.earlier addObject:pending.process];
+      [pending.changes addObject:event.at];
+    }
+    pending.process = process;
+    pending.clone = NO;
+    pending.deadline = deadline;
+  } else if (known != nil) {
+    [self changed:known into:process at:event.at];
+  } else {
+    [self await:process copy:NO until:deadline];
+  }
+}
+
+- (void)gone:(FLProcessEvent *)event {
+  NSString *identity = [event.process identity];
+  FLPendingProcess *pending = _pending[identity];
+  if (pending != nil) {
+    [_pending removeObjectForKey:identity];
+    if (pending.lost) {
+      [self missed:pending.process at:event.at];
+    }
+    if (pending.clone) {
+      return;
+    }
+    [self settled:pending at:event.at];
+  }
+  FLProcess *known = _known[identity];
+  if (known == nil) {
+    return;
+  }
+  if (event.processor != nil) {
+    _processor[identity] = event.processor;
+  }
+  [self.ledger ended:known processor:_processor[identity] memory:_memory[identity] at:event.at];
+  if (_jobLabels[@(known.pid)] != nil) {
+    _jobsStale = YES;
+  }
+  [self exited:known labels:_jobLabels at:event.at];
+  [_known removeObjectForKey:identity];
+}
+
+- (void)settle {
+  NSDate *now = [NSDate date];
+  NSDate *next = nil;
+  for (NSString *identity in _pending.allKeys) {
+    FLPendingProcess *pending = _pending[identity];
+    if ([pending.deadline compare:now] != NSOrderedDescending) {
+      [_pending removeObjectForKey:identity];
+      [self settled:pending at:now];
+    } else if (next == nil || [pending.deadline compare:next] == NSOrderedAscending) {
+      next = pending.deadline;
+    }
+  }
+  if (_jobsStale) {
+    NSDate *due = [_jobsLoaded ?: now dateByAddingTimeInterval:FLJobsFresh];
+    if (next == nil || [due compare:next] == NSOrderedAscending) {
+      next = due;
+    }
+  }
+  if (next == nil || _settling || _queue == nil) {
+    return;
+  }
+  _settling = YES;
+  __weak FLProcessMonitor *weak = self;
+  NSTimeInterval wait = MAX(FLSettleSoonest, next.timeIntervalSinceNow);
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), _queue, ^{
+    [weak settleLater];
+  });
+}
+
+- (void)settleLater {
+  _settling = NO;
+  [self handle:@[]];
+}
+
+- (void)handle:(NSArray<FLProcessEvent *> *)events {
+  @try {
+    @autoreleasepool {
+      for (FLProcessEvent *event in events) {
+        if (event.change == FLProcessAppeared) {
+          [self appeared:event];
+        } else if (event.change == FLProcessBecame) {
+          [self became:event];
+        } else {
+          [self gone:event];
+        }
+      }
+      if (_jobsStale && -_jobsLoaded.timeIntervalSinceNow >= FLJobsFresh) {
+        [self refreshJobs];
+      }
+      [self settle];
+    }
+  } @catch (NSException *exception) {
+    FLNote(@"finchlogs", FLLevelError, @"processes", @"failed: %@ (%@)", exception.reason,
+           exception.name);
+  }
+}
+
+- (void)watchOnQueue:(dispatch_queue_t)queue {
+  if (_watcher != nil) {
+    return;
+  }
+  _queue = queue;
+  __weak FLProcessMonitor *weak = self;
+  FLProcessWatcher *watcher =
+    [[FLProcessWatcher alloc] initWithQueue:queue
+                                    handler:^(NSArray<FLProcessEvent *> *events) {
+                                      [weak handle:events];
+                                    }];
+  if ([watcher start]) {
+    _watcher = watcher;
+  } else {
+    FLNote(@"finchlogs", FLLevelWarning, @"processes",
+           @"Process events could not be watched, so runs shorter than the time between two "
+           @"looks at the process table will be missed");
+  }
 }
 
 - (NSString *)versionOf:(NSDictionary *)app {
@@ -492,6 +864,7 @@ static NSString *const FLAppsState = @"apps";
     uint64_t memory = fresh.footprintBytes ?: fresh.residentBytes;
     _processor[identity] = @(fresh.processorSeconds);
     _memory[identity] = @(memory);
+    [self.ledger seen:fresh];
     NSString *bundle = [known appBundlePath];
     [rows addObject:@{
       @"pid" : @(known.pid),

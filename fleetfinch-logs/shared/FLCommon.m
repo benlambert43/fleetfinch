@@ -13,7 +13,11 @@ NSString *const FLCommandImport = @"com.fleetfinch.logs.import";
 NSString *const FLCommandMaintain = @"com.fleetfinch.logs.maintain";
 NSString *const FLCommandSettings = @"com.fleetfinch.logs.settings";
 NSString *const FLCommandWatch = @"com.fleetfinch.logs.watch";
+NSString *const FLCommandUsage = @"com.fleetfinch.logs.usage";
 NSString *const FLNoticeChanged = @"com.fleetfinch.logs.changed";
+NSString *const FLNoticeUsage = @"com.fleetfinch.logs.usage.ready";
+NSString *const FLUsageState = @"usage";
+NSString *const FLUsageReportState = @"usagereport";
 NSString *const FLNoticeSleeping = @"com.fleetfinch.logs.sleeping";
 
 NSString *FLLivePath(void) {
@@ -235,6 +239,9 @@ NSString *FLFormatBytes(uint64_t bytes) {
 }
 
 NSString *FLFormatDuration(NSTimeInterval seconds) {
+  if (seconds > 0 && seconds < 1) {
+    return [NSString stringWithFormat:@"%ld ms", MAX(1L, lround(seconds * 1000.0))];
+  }
   long total = (long)MAX(0.0, seconds);
   long days = total / 86400;
   long hours = (total % 86400) / 3600;

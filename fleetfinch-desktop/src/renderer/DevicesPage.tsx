@@ -3,15 +3,17 @@ import {
   ChevronRightIcon,
   DevicePhoneMobileIcon,
 } from "@heroicons/react/20/solid";
-import { useEffect } from "react";
+import { Activity, useEffect } from "react";
 
 import { deviceDetails } from "@/devices.ts";
 import { AddDevice } from "@/renderer/AddDevice.tsx";
+import { DeviceBackupsPage } from "@/renderer/DeviceBackupsPage.tsx";
 import { DevicePage } from "@/renderer/DevicePage.tsx";
 import {
   deviceHref,
   showDevices,
   useDevices,
+  useShowingDeviceBackups,
   useShownDeviceAddress,
 } from "@/renderer/devices.ts";
 import { StatusRow } from "@/renderer/Panel.tsx";
@@ -19,6 +21,7 @@ import { StatusRow } from "@/renderer/Panel.tsx";
 export function DevicesPage() {
   const devices = useDevices();
   const address = useShownDeviceAddress();
+  const showingBackups = useShowingDeviceBackups();
   const device = devices.find((saved) => saved.address === address);
   const missing = address !== null && device === undefined;
 
@@ -29,7 +32,16 @@ export function DevicesPage() {
   }, [missing]);
 
   if (device !== undefined) {
-    return <DevicePage key={device.address} device={device} />;
+    return (
+      <>
+        <Activity mode={showingBackups ? "hidden" : "visible"}>
+          <DevicePage key={device.address} device={device} />
+        </Activity>
+        {showingBackups && (
+          <DeviceBackupsPage key={device.address} device={device} />
+        )}
+      </>
+    );
   }
 
   return (

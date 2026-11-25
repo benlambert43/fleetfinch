@@ -2,6 +2,7 @@
 
 #import "FLCommon.h"
 #import "FLStatus.h"
+#import "FLUsage.h"
 
 void FLNote(NSString *stream, FLLevel level, NSString *source, NSString *format, ...)
   NS_FORMAT_FUNCTION(4, 5);
@@ -26,7 +27,10 @@ void FLNote(NSString *stream, FLLevel level, NSString *source, NSString *format,
 
 @interface FLProcessMonitor : NSObject
 
+@property(nonatomic, strong) FLUsageLedger *ledger;
+
 - (void)poll;
+- (void)watchOnQueue:(dispatch_queue_t)queue;
 - (void)checkApps;
 - (void)sampleUsage:(BOOL)record;
 - (NSArray<NSDictionary *> *)liveProcesses;

@@ -22,6 +22,7 @@ static NSString *FLSnapshotTitle(NSString *kind) {
     @"extensions" : @"Kernel Extensions",
     @"sysctl" : @"Kernel Settings",
     @"registry" : @"Hardware Registry",
+    @"usage" : @"What Has Run",
   };
   return titles[kind] ?: kind.capitalizedString;
 }

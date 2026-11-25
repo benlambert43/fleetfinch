@@ -28,6 +28,7 @@ static const NSTimeInterval FLFrequentSnapshots = 6 * 60 * 60;
 static const NSTimeInterval FLSlowLaunch = 2;
 static const NSTimeInterval FLAppsInterval = 600;
 static const NSTimeInterval FLAppsFirst = 120;
+static const NSTimeInterval FLReportEvery = 30;
 
 static dispatch_queue_t FLWork;
 static NSMutableDictionary<NSString *, dispatch_source_t> *FLTimers;
@@ -44,6 +45,7 @@ static NSDictionary *FLLastImport;
 static NSDictionary *FLUsage;
 static NSDate *FLUsageAt;
 static NSDate *FLSampledAt;
+static NSDate *FLReportedAt;
 static NSUInteger FLServicesWritten;
 
 static FLSyslogMonitor *FLSyslog;
@@ -54,9 +56,12 @@ static FLPowerMonitor *FLPower;
 static FLNetworkMonitor *FLNetwork;
 static FLEventMonitor *FLEvents;
 static FLImportMonitor *FLImports;
+static FLUsageLedger *FLRunLedger;
 
 static NSArray<NSString *> *FLFrequentKinds(void) {
-  return @[ @"processes", @"services", @"volumes", @"network", @"power", @"kernel" ];
+  return @[
+    @"processes", @"services", @"volumes", @"network", @"power", @"kernel", @"usage"
+  ];
 }
 
 static BOOL FLRecords(NSString *stream) {
@@ -409,6 +414,7 @@ static void FLCatchUp(void) {
     FLEveryResources(interval);
   }
   FLWriteStatus();
+  [FLRunLedger saveIfDue];
 }
 
 static void FLSchedule(void) {
@@ -445,6 +451,7 @@ static void FLSchedule(void) {
   });
   FLEvery(@"heartbeat", 60, 60, ^{
     FLSaveState();
+    [FLRunLedger saveIfDue];
   });
   FLEvery(@"live", 5, 5, ^{
     FLWriteLive(NO);
@@ -463,6 +470,7 @@ static void FLStop(int signal) {
          FLFormatDuration(-FLStarted.timeIntervalSinceNow));
   [FLSyslog stop];
   FLSaveState();
+  [FLRunLedger save];
   [[FLStore shared] sync];
   exit(0);
 }
@@ -523,6 +531,9 @@ int FLRunDaemon(void) {
   FLNetwork = [FLNetworkMonitor new];
   FLEvents = [FLEventMonitor new];
   FLImports = [FLImportMonitor new];
+  FLRunLedger = [[FLUsageLedger alloc] initForBoot:FLBootIdentifier()];
+  FLSetUsageLedger(FLRunLedger);
+  FLProcesses.ledger = FLRunLedger;
   if ([FLState[@"boot"] isEqualToString:FLBootIdentifier()] &&
       [FLState[@"kernelSeen"] isKindOfClass:[NSData class]]) {
     FLKernel.seen = [[NSString alloc] initWithData:FLState[@"kernelSeen"]
@@ -549,6 +560,7 @@ int FLRunDaemon(void) {
       }
       FLWriteStatus();
       [FLProcesses poll];
+      [FLProcesses watchOnQueue:FLWork];
       [FLResources sample:NO];
       FLWriteStatus();
       [FLEvents startOnQueue:FLWork
@@ -590,6 +602,14 @@ int FLRunDaemon(void) {
     FLNote(@"finchlogs", FLLevelInfo, @"command", @"Settings changed; rescheduling");
     FLSchedule();
     FLWriteStatus();
+  });
+  FLOnCommand(FLCommandUsage, ^{
+    [FLRunLedger save];
+    if (FLReportedAt == nil || -FLReportedAt.timeIntervalSinceNow >= FLReportEvery) {
+      FLWriteUsageReport(FLUsageReport([FLRunLedger contents]));
+      FLReportedAt = [NSDate date];
+    }
+    notify_post(FLNoticeUsage.UTF8String);
   });
   FLOnCommand(FLCommandWatch, ^{
     BOOL already = FLWatched();

@@ -184,8 +184,9 @@ static NSString *const FLSnapshotSwitch = @"snapshot";
                          @[ @"Every 2 seconds", @2 ], @[ @"Every 5 seconds", @5 ],
                          @[ @"Every 15 seconds", @15 ], @[ @"Every minute", @60 ]
                        ]
-                        footer:@"A process that starts and exits between two looks is not "
-                               @"seen, so shorter catches more."]];
+                        footer:@"Processes are followed as the kernel reports them. This is "
+                               @"how often that record is checked against the process table "
+                               @"and launchd's services are compared."]];
   [pace addRow:[self choiceRow:@"Dumps and log files"
                            key:FLSettingImportInterval
                        choices:@[

@@ -316,6 +316,38 @@ FLProcess *FLProcessWithIdentifier(int pid) {
   return FLProcessFromEntry(&entry, YES);
 }
 
+FLProcess *FLProcessSketch(int pid, BOOL arguments) {
+  char path[FL_PATH_LIMIT];
+  int length = proc_pidpath(pid, path, sizeof(path));
+  int name[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+  struct kinfo_proc entry;
+  size_t size = sizeof(entry);
+  FLProcess *process = nil;
+  if (sysctl(name, 4, &entry, &size, NULL, 0) == 0 && size >= sizeof(entry)) {
+    process = FLProcessFromEntry(&entry, NO);
+  } else if (length > 0) {
+    process = [FLProcess new];
+    process.pid = pid;
+  }
+  if (length > 0) {
+    process.path = [[NSString alloc] initWithBytes:path
+                                            length:(NSUInteger)length
+                                          encoding:NSUTF8StringEncoding];
+  }
+  if (arguments && process != nil) {
+    process.arguments = FLProcessArguments(pid);
+  }
+  return process;
+}
+
+NSNumber *FLProcessorSecondsSpent(int pid) {
+  struct rusage_info_v2 usage;
+  if (proc_pid_rusage(pid, RUSAGE_INFO_V2, (rusage_info_t *)&usage) != 0) {
+    return nil;
+  }
+  return @(FLSecondsFromAbsolute(usage.ri_user_time + usage.ri_system_time));
+}
+
 NSDictionary<NSString *, NSNumber *> *FLProcessorTicks(void) {
   host_cpu_load_info_data_t load;
   mach_msg_type_number_t count = HOST_CPU_LOAD_INFO_COUNT;

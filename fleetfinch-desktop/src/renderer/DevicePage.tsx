@@ -1,5 +1,6 @@
 import { AppShell, SectionHeading } from "@fleetfinch/ui";
 import { ChevronLeftIcon } from "@heroicons/react/20/solid";
+import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 
 import {
@@ -11,8 +12,9 @@ import {
 import type { Device } from "@/devices.ts";
 import { DeviceApps } from "@/renderer/DeviceApps.tsx";
 import { ensureDeviceApps, useDeviceApps } from "@/renderer/deviceApps.ts";
-import { devicesHref } from "@/renderer/devices.ts";
+import { deviceBackupsHref, devicesHref } from "@/renderer/devices.ts";
 import { RemoveDeviceDialog } from "@/renderer/DeviceSettings.tsx";
+import { secondaryButton } from "@/renderer/Panel.tsx";
 
 const lowSpace = 0.1;
 
@@ -83,6 +85,27 @@ function Storage({ address }: { address: string }) {
   );
 }
 
+export function BackLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="-ml-1 flex h-7 max-w-full min-w-0 items-center gap-0.5
+        rounded-md pr-2 pl-1 text-subheadline text-muted hover:bg-foreground/5
+        hover:text-foreground focus-visible:outline-2
+        focus-visible:outline-offset-2 focus-visible:outline-foreground"
+    >
+      <ChevronLeftIcon aria-hidden="true" className="size-5 shrink-0" />
+      <span className="truncate">{children}</span>
+    </a>
+  );
+}
+
 export function DevicePage({ device }: { device: Device }) {
   const { address } = device;
   const name = device.name ?? address;
@@ -100,19 +123,19 @@ export function DevicePage({ device }: { device: Device }) {
   return (
     <AppShell
       title={name}
-      lead={
-        <a
-          href={devicesHref}
-          className="-ml-1 flex h-7 items-center gap-0.5 rounded-md pr-2 pl-1
-            text-subheadline text-muted hover:bg-foreground/5
-            hover:text-foreground focus-visible:outline-2
-            focus-visible:outline-offset-2 focus-visible:outline-foreground"
-        >
-          <ChevronLeftIcon aria-hidden="true" className="size-5 shrink-0" />
-          Devices
-        </a>
-      }
+      lead={<BackLink href={devicesHref}>Devices</BackLink>}
     >
+      <a
+        href={deviceBackupsHref(address)}
+        className={`flex items-center gap-1.5 self-start ${secondaryButton}`}
+      >
+        <ArchiveBoxIcon
+          aria-hidden="true"
+          className="size-4.5"
+          strokeWidth={2}
+        />
+        Device Backups
+      </a>
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="flex flex-col items-start gap-3">
           <SectionHeading>About</SectionHeading>

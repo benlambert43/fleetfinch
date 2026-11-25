@@ -21,6 +21,19 @@ void FLWriteState(NSString *name, NSDictionary *state) {
   [state writeToFile:FLStateFile(name) atomically:YES];
 }
 
+BOOL FLWriteCompactState(NSString *name, NSDictionary *state) {
+  NSData *data =
+    [NSPropertyListSerialization dataWithPropertyList:state
+                                               format:NSPropertyListBinaryFormat_v1_0
+                                              options:0
+                                                error:NULL];
+  return data != nil && [data writeToFile:FLStateFile(name) atomically:YES];
+}
+
+NSDate *FLStateWritten(NSString *name) {
+  return FLFileModified(FLStateFile(name));
+}
+
 NSDictionary *FLServiceStatus(void) {
   return FLReadState(@"status");
 }

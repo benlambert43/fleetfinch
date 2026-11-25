@@ -4,6 +4,7 @@
 #import "FLSettings.h"
 #import "FLStatus.h"
 #import "FLTheme.h"
+#import "FLUsageController.h"
 
 static const NSTimeInterval FLFreshFor = 20;
 
@@ -92,6 +93,37 @@ static const NSTimeInterval FLFreshFor = 20;
   }
   if (device.rows.count > 0) {
     [sections addObject:device];
+  }
+
+  [FLUsageController ask];
+  NSDictionary *report = [FLUsageController report];
+  NSDictionary *counted = report[@"summary"];
+  if ([counted isKindOfClass:[NSDictionary class]]) {
+    FLSection *usage = [FLSection sectionWithTitle:@"What Has Run"];
+    __weak FLOverviewController *weak = self;
+    for (NSArray<NSString *> *kind in @[
+           @[ @"app", @"Apps", @"never opened" ], @[ @"service", @"Services", @"never run" ],
+           @[ @"program", @"Programs", @"never run" ]
+         ]) {
+      NSDictionary *counts = counted[kind[0]];
+      NSString *detail = [NSString stringWithFormat:@"%@ of %@ %@", counts[@"never"] ?: @0,
+                                                    counts[@"total"] ?: @0, kind[2]];
+      [usage addRow:[FLRow linkWithTitle:kind[1]
+                                  detail:detail
+                                  action:^{
+                                    [weak.navigationController
+                                      pushViewController:[[FLUsageController alloc]
+                                                           initWithKind:kind[0]
+                                                              neverOnly:YES]
+                                                animated:YES];
+                                  }]];
+    }
+    NSDate *began = report[@"began"];
+    usage.footer = [NSString
+      stringWithFormat:@"Counted since %@, with the device awake for %@ of that time.",
+                       [began isKindOfClass:[NSDate class]] ? FLFormatDay(began) : @"the start",
+                       FLFormatDuration([report[@"watched"] doubleValue])];
+    [sections addObject:usage];
   }
 
   NSDictionary *resources = [self resourcesFrom:status];

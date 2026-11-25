@@ -30,6 +30,7 @@ export const finchSnapshotTitles: Record<string, string> = {
   extensions: "Kernel Extensions",
   sysctl: "Kernel Settings",
   registry: "Hardware Registry",
+  usage: "What Has Run",
 };
 
 export interface FinchLine {
