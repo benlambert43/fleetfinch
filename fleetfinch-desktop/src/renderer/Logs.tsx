@@ -16,10 +16,14 @@ import {
   useDeferredValue,
   useEffect,
   useId,
+  useRef,
   useState,
 } from "react";
 
+import { deviceDetails } from "@/devices.ts";
+
 import {
+  type LogDumpImport,
   type LogGroup,
   type LogGroupState,
   logGroupStateLabels,
@@ -29,28 +33,30 @@ import {
   logSourceLabels,
   logSources,
 } from "@/logs.ts";
+import { useDevices } from "@/renderer/devices.ts";
 import {
+  importLogDump,
   logsLoaded,
   selectLogGroup,
+  setDeviceTailEnabled,
   setLogSource,
-  setSshRefreshEnabled,
   useLogs,
   useLogSource,
 } from "@/renderer/logs.ts";
-import { secondaryButton, StatusRow } from "@/renderer/Panel.tsx";
+import { dialogButton, secondaryButton, StatusRow } from "@/renderer/Panel.tsx";
 
 const descriptions: Record<LogSource, string> = {
   app: "What FleetFinch Developer reports about itself: its window's console, and anything that goes wrong in the window or the main process",
   computer:
     "Each task the app runs on this computer, with every command it starts and each line those programs print",
   device:
-    "The system log of each iPhone or iPad, read while it is connected by USB or refreshed over SSH, kept apart for each time it connects",
+    "What each iPhone or iPad records: its system log while it is connected by USB, a live tail of everything Finch Logs keeps on it over SSH, and log dumps you import",
 };
 
 const groupNouns: Record<LogSource, string> = {
   app: "Launches",
   computer: "Tasks",
-  device: "Connections",
+  device: "Logs",
 };
 
 const lineStyles: Record<LogKind, string> = {
@@ -348,9 +354,9 @@ function EmptyLogs({ source }: { source: LogSource }) {
       ),
       ...(canReadDevices
         ? {
-            title: "No devices yet",
+            title: "No device logs yet",
             description:
-              "Connect an iPhone or iPad by USB, or refresh devices added over SSH",
+              "Connect an iPhone or iPad by USB, tail devices that run Finch Logs, or import a log dump",
           }
         : {
             title: "USB device logs need libimobiledevice-utils",
@@ -366,29 +372,167 @@ function EmptyLogs({ source }: { source: LogSource }) {
   );
 }
 
-function SshRefreshOption() {
-  const { sshRefresh } = useLogs();
+function importOutcome(imported: LogDumpImport): string {
+  if (imported.state === "imported") {
+    return `Imported ${String(imported.logs)} logs and ${String(imported.snapshots)} snapshots from ${imported.from}. The whole dump is in ${imported.file}`;
+  }
+  return imported.state === "failed" ? imported.message : "";
+}
+
+function ImportDialog({ onClosed }: { onClosed: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const headingId = useId();
+  const descriptionId = useId();
+  const devices = useDevices();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+    };
+  }, []);
+
+  function choose(address: string | null) {
+    dialogRef.current?.close();
+    importLogDump(address);
+  }
+
+  const choice = `flex w-full flex-col rounded-lg px-3 py-2 text-left
+    hover:bg-menu-border/50 focus-visible:outline-2
+    focus-visible:-outline-offset-2 focus-visible:outline-menu-foreground
+    active:bg-menu-border/80`;
+
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-      <label className="flex items-center gap-2 text-subheadline">
-        <input
-          type="checkbox"
-          checked={sshRefresh.enabled}
-          onChange={(event) => {
-            setSshRefreshEnabled(event.target.checked);
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={headingId}
+      aria-describedby={descriptionId}
+      closedby="any"
+      onClose={() => {
+        if (dialogRef.current?.open !== true) {
+          onClosed();
+        }
+      }}
+      className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-2xl border-2
+        border-menu-border bg-menu p-5 text-menu-foreground shadow-lg
+        backdrop:bg-background/60 backdrop:backdrop-blur-xs"
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <h2 id={headingId} className="text-headline">
+            Import a Log Dump
+          </h2>
+          <p id={descriptionId} className="text-footnote text-menu-muted">
+            Copies every log Finch Logs has kept on a device to a file on this
+            computer and shows the newest lines here. You can also open a dump
+            you already have.
+          </p>
+        </div>
+        <ul className="flex flex-col gap-1">
+          {devices.map((device) => (
+            <li key={device.address}>
+              <button
+                type="button"
+                onClick={() => {
+                  choose(device.address);
+                }}
+                className={choice}
+              >
+                <span className="truncate text-subheadline">
+                  From {device.name ?? device.address}
+                </span>
+                <span className="truncate text-footnote text-menu-muted">
+                  {deviceDetails(device)}
+                </span>
+              </button>
+            </li>
+          ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                choose(null);
+              }}
+              className={choice}
+            >
+              <span className="truncate text-subheadline">
+                Open a Dump File…
+              </span>
+              <span className="truncate text-footnote text-menu-muted">
+                A file saved by an earlier import, or by finchlog dump
+              </span>
+            </button>
+          </li>
+        </ul>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              dialogRef.current?.close();
+            }}
+            className={`${dialogButton} hover:bg-menu-border/50
+              active:bg-menu-border/80`}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function DeviceLogOptions() {
+  const { deviceTail, importing, imported } = useLogs();
+  const [choosing, setChoosing] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label className="flex items-center gap-2 text-subheadline">
+          <input
+            type="checkbox"
+            checked={deviceTail.enabled}
+            onChange={(event) => {
+              setDeviceTailEnabled(event.target.checked);
+            }}
+            className="size-4 accent-primary"
+          />
+          Tail devices that run Finch Logs
+        </label>
+        {deviceTail.enabled && deviceTail.paused && (
+          <span
+            role="status"
+            className="flex items-center gap-1 text-footnote text-muted"
+          >
+            <PauseCircleIcon aria-hidden="true" className="size-4 shrink-0" />
+            Paused while another SSH task runs
+          </span>
+        )}
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => {
+            setChoosing(true);
           }}
-          className="size-4 accent-primary"
-        />
-        Refresh devices added over SSH every 5 seconds
-      </label>
-      {sshRefresh.enabled && sshRefresh.paused && (
-        <span
-          role="status"
-          className="flex items-center gap-1 text-footnote text-muted"
+          className={secondaryButton}
         >
-          <PauseCircleIcon aria-hidden="true" className="size-4 shrink-0" />
-          Paused while another SSH task runs
-        </span>
+          {importing ? "Importing…" : "Import Log Dump…"}
+        </button>
+      </div>
+      <p
+        role="status"
+        className={`text-footnote wrap-break-word ${
+          imported?.state === "failed" ? "text-danger" : "text-muted"
+        }`}
+      >
+        {imported === null ? "" : importOutcome(imported)}
+      </p>
+      {choosing && (
+        <ImportDialog
+          onClosed={() => {
+            setChoosing(false);
+          }}
+        />
       )}
     </div>
   );
@@ -419,7 +563,7 @@ function SourcePanel({
       className="flex min-h-0 flex-1 flex-col gap-4"
     >
       <p className="text-footnote text-muted">{descriptions[source]}</p>
-      {source === "device" && <SshRefreshOption />}
+      {source === "device" && <DeviceLogOptions />}
       {selected === undefined ? (
         <EmptyLogs source={source} />
       ) : (

@@ -10,6 +10,10 @@ export const secondaryButton = `h-9 rounded-lg bg-secondary px-3
   focus-visible:outline-2 focus-visible:outline-offset-2
   focus-visible:outline-foreground disabled:opacity-60`;
 
+export const dialogButton = `h-9 rounded-lg px-3 text-subheadline
+  focus-visible:outline-2 focus-visible:outline-offset-2
+  focus-visible:outline-menu-foreground aria-disabled:opacity-60`;
+
 export function PanelBody({ children }: { children: ReactNode }) {
   return <div className="flex flex-1 flex-col gap-4">{children}</div>;
 }
@@ -21,11 +25,13 @@ export function StatusList({ children }: { children: ReactNode }) {
 export function StatusRow({
   icon,
   title,
+  href,
   state,
   description,
 }: {
   icon: ReactNode;
   title: string;
+  href?: string;
   state?: string;
   description: string;
 }) {
@@ -34,7 +40,18 @@ export function StatusRow({
       {icon}
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         <dt className="text-subheadline">
-          {title}
+          {href === undefined ? (
+            title
+          ) : (
+            <a
+              href={href}
+              className="rounded-sm underline-offset-2 hover:underline
+                focus-visible:outline-2 focus-visible:outline-offset-2
+                focus-visible:outline-foreground"
+            >
+              {title}
+            </a>
+          )}
           {state !== undefined && <span className="sr-only">, {state}</span>}
         </dt>
         <dd className="text-footnote wrap-break-word text-muted">

@@ -13,11 +13,19 @@ import {
   readBuildTools,
   setUpBuildTools,
 } from "@/main/buildTools/setup.ts";
+import { deviceTaskChannel, packageIdPattern } from "@/deviceApps.ts";
 import { exportBackup, restoreBackup } from "@/main/backup.ts";
+import {
+  type DeviceTaskSender,
+  installDevicePackage,
+  readDeviceApps,
+  removeDevicePackage,
+} from "@/main/deviceApps.ts";
 import { addDevice, readDevices, removeDevice } from "@/main/devices.ts";
+import { importLogDump } from "@/main/finchLogImport.ts";
+import { retryDeviceLogTail, setDeviceLogTail } from "@/main/finchLogTail.ts";
 import { readLogs } from "@/main/logs.ts";
 import { runMenuAction } from "@/main/menu.ts";
-import { setDeviceLogRefresh } from "@/main/sshDeviceLogs.ts";
 import { getThemePreference, setThemePreference } from "@/main/theme.ts";
 
 type Handlers = {
@@ -43,6 +51,18 @@ const removalSchema = z.strictObject({
 
 const backupPasswordSchema = z.string().min(8).max(1024);
 
+const packageIdSchema = z.string().max(128).regex(packageIdPattern);
+
+const packageInstallSchema = z.strictObject({
+  address: addressSchema,
+  expected: packageIdSchema.nullable(),
+});
+
+const packageRemovalSchema = z.strictObject({
+  address: addressSchema,
+  id: packageIdSchema,
+});
+
 const deviceLoginSchema = z.strictObject({
   address: addressSchema,
   password: z
@@ -64,6 +84,14 @@ function listenerFor(window: BrowserWindow): BuildToolsListener {
     log: (line) => {
       send(buildToolsLogChannel, line);
     },
+  };
+}
+
+function deviceTaskSender(window: BrowserWindow): DeviceTaskSender {
+  return (event) => {
+    if (!window.isDestroyed()) {
+      window.webContents.send(deviceTaskChannel, event);
+    }
   };
 }
 
@@ -112,11 +140,50 @@ export const handlers: Handlers = {
     }
     return restoreBackup(window, parsed.data);
   },
-  setDeviceLogRefresh: (_window, enabled) => {
+  setDeviceLogTail: (_window, enabled) => {
     const parsed = z.boolean().safeParse(enabled);
     if (!parsed.success) {
-      return Promise.reject(new Error("Refused an unknown refresh setting"));
+      return Promise.reject(new Error("Refused an unknown tail setting"));
     }
-    return setDeviceLogRefresh(parsed.data);
+    return setDeviceLogTail(parsed.data);
+  },
+  importLogDump: (window, address) => {
+    const parsed = addressSchema.nullable().safeParse(address);
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused an unknown device address"));
+    }
+    return importLogDump(window, parsed.data);
+  },
+  getDeviceApps: (_window, address) => {
+    const parsed = addressSchema.safeParse(address);
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused an unknown device address"));
+    }
+    return readDeviceApps(parsed.data);
+  },
+  installDevicePackage: (window, address, expected) => {
+    const parsed = packageInstallSchema.safeParse({ address, expected });
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused an unknown package install"));
+    }
+    return installDevicePackage(
+      window,
+      parsed.data.address,
+      parsed.data.expected,
+      deviceTaskSender(window),
+    ).finally(() => {
+      retryDeviceLogTail(parsed.data.address);
+    });
+  },
+  removeDevicePackage: (window, address, id) => {
+    const parsed = packageRemovalSchema.safeParse({ address, id });
+    if (!parsed.success) {
+      return Promise.reject(new Error("Refused an unknown package removal"));
+    }
+    return removeDevicePackage(
+      parsed.data.address,
+      parsed.data.id,
+      deviceTaskSender(window),
+    );
   },
 };

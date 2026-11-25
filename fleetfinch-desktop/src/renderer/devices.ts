@@ -2,6 +2,8 @@ import { use, useSyncExternalStore } from "react";
 
 import { type Device, withDevice } from "@/devices.ts";
 
+export const devicesHref = "#/devices";
+
 let devices: readonly Device[] = [];
 const listeners = new Set<() => void>();
 
@@ -34,4 +36,41 @@ export function rememberDevice(device: Device): void {
 export function useDevices(): readonly Device[] {
   use(loaded);
   return useSyncExternalStore(subscribe, currentDevices);
+}
+
+export function deviceHref(address: string): string {
+  return `${devicesHref}/${encodeURIComponent(address)}`;
+}
+
+export function isDevicesHash(hash: string): boolean {
+  return hash === devicesHref || hash.startsWith(`${devicesHref}/`);
+}
+
+function subscribeToHash(listener: () => void): () => void {
+  window.addEventListener("hashchange", listener);
+  return () => {
+    window.removeEventListener("hashchange", listener);
+  };
+}
+
+function shownAddress(): string | null {
+  const { hash } = window.location;
+  if (!hash.startsWith(`${devicesHref}/`)) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(hash.slice(devicesHref.length + 1));
+  } catch {
+    return null;
+  }
+}
+
+export function useShownDeviceAddress(): string | null {
+  return useSyncExternalStore(subscribeToHash, shownAddress);
+}
+
+export function showDevices(): void {
+  if (shownAddress() !== null) {
+    window.location.replace(devicesHref);
+  }
 }

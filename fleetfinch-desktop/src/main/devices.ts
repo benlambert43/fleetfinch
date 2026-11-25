@@ -38,7 +38,7 @@ const savedLine = /^key=saved$/m;
 const removedMarker = "key=removed";
 const removedLine = /^key=removed$/m;
 const keptKeys = ".ssh/authorized_keys.fleetfinch";
-const noSsh =
+export const noSsh =
   "SSH is not installed. Set Up Build Tools in Computer Info installs it.";
 const versionFile = "/System/Library/CoreServices/SystemVersion.plist";
 const testCommand = `echo "name=$(uname -n)"; echo "model=$(uname -m)"; cat ${versionFile}`;
@@ -69,6 +69,11 @@ export async function readDevices(): Promise<Device[]> {
     .catch(() => null);
   const parsed = devicesSchema.safeParse(saved);
   return parsed.success ? parsed.data : [];
+}
+
+export async function savedDevice(address: string): Promise<Device | null> {
+  const devices = await readDevices();
+  return devices.find((device) => device.address === address) ?? null;
 }
 
 async function writeDevices(devices: readonly Device[]): Promise<void> {

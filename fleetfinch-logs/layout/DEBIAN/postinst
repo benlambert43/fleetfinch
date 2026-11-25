@@ -1,0 +1,7 @@
+#!/bin/sh
+service=/Library/LaunchDaemons/com.fleetfinch.logs.daemon.plist
+launchctl unload "$service" >/dev/null 2>&1
+if ! launchctl load "$service"; then
+  echo "Finch Logs is installed, but its service did not start. It will start when the device next restarts."
+fi
+exit 0

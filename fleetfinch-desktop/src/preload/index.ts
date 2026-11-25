@@ -11,6 +11,7 @@ import {
   type BuildToolsProgress,
   buildToolsProgressChannel,
 } from "@/buildTools.ts";
+import { deviceTaskChannel, type DeviceTaskEvent } from "@/deviceApps.ts";
 import { logsChannel, type LogsUpdate } from "@/logs.ts";
 
 function invoke<Method extends keyof BridgeMethods>(method: Method) {
@@ -34,7 +35,11 @@ const bridge: Bridge = {
   removeDevice: invoke("removeDevice"),
   exportBackup: invoke("exportBackup"),
   restoreBackup: invoke("restoreBackup"),
-  setDeviceLogRefresh: invoke("setDeviceLogRefresh"),
+  setDeviceLogTail: invoke("setDeviceLogTail"),
+  importLogDump: invoke("importLogDump"),
+  getDeviceApps: invoke("getDeviceApps"),
+  installDevicePackage: invoke("installDevicePackage"),
+  removeDevicePackage: invoke("removeDevicePackage"),
   onWindowMaximizedChange: (listener) => {
     const forward = (_event: IpcRendererEvent, maximized: boolean) => {
       listener(maximized);
@@ -72,6 +77,15 @@ const bridge: Bridge = {
     ipcRenderer.on(logsChannel, forward);
     return () => {
       ipcRenderer.off(logsChannel, forward);
+    };
+  },
+  onDeviceTask: (listener) => {
+    const forward = (_event: IpcRendererEvent, event: DeviceTaskEvent) => {
+      listener(event);
+    };
+    ipcRenderer.on(deviceTaskChannel, forward);
+    return () => {
+      ipcRenderer.off(deviceTaskChannel, forward);
     };
   },
 };

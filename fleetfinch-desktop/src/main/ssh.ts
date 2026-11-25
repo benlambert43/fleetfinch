@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { Readable } from "node:stream";
 
 import { app } from "electron";
 
@@ -9,9 +10,13 @@ import { exists, isExecutable } from "@/main/buildTools/paths.ts";
 import {
   commandText,
   type Log,
+  type ProcessData,
   type ProcessResult,
+  type ProcessSave,
+  readProcess,
   runProcess,
   runStep,
+  saveProcess,
 } from "@/main/buildTools/process.ts";
 
 const sshFile = "/usr/bin/ssh";
@@ -19,7 +24,11 @@ const keygenFile = "/usr/bin/ssh-keygen";
 const scriptFile = "/usr/bin/script";
 const shellFile = "/bin/sh";
 const connectTimeoutSeconds = 10;
+const aliveSeconds = 15;
+const aliveCount = 3;
 const timeoutMs = 30_000;
+const wakeEveryMs = 4000;
+const wakeTimeoutMs = 15_000;
 const passwordPrompt = /'s password: $/;
 const identityName = /^id_ed25519(?:-[\da-f]{8})?$/;
 
@@ -208,11 +217,12 @@ function sshArgs(
   address: string,
   options: string[],
   command: string,
+  input = false,
 ): string[] {
   return [
     "-F",
     "none",
-    "-n",
+    ...(input ? [] : ["-n"]),
     "-T",
     "-l",
     "root",
@@ -270,30 +280,122 @@ export function runWithPassword(
   );
 }
 
+async function keyOptions(probes = true): Promise<string[]> {
+  const identities = (await identityFiles()).flatMap((file) => ["-i", file]);
+  return [
+    ...identities,
+    "-o",
+    "IdentitiesOnly=yes",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "PreferredAuthentications=publickey",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    `ServerAliveInterval=${String(probes ? aliveSeconds : 0)}`,
+    "-o",
+    `ServerAliveCountMax=${String(aliveCount)}`,
+  ];
+}
+
 export async function runAsRoot(
   address: string,
   command: string,
   log?: Log,
   signal?: AbortSignal,
+  limitMs = timeoutMs,
 ): Promise<ProcessResult> {
-  const identities = (await identityFiles()).flatMap((file) => ["-i", file]);
+  return runProcess(sshFile, sshArgs(address, await keyOptions(), command), {
+    env: sshEnvironment(),
+    timeoutMs: limitMs,
+    log,
+    signal,
+  });
+}
+
+export async function followAsRoot(
+  address: string,
+  command: string,
+  log: Log,
+  signal: AbortSignal,
+): Promise<ProcessResult> {
   return runProcess(
     sshFile,
-    sshArgs(
-      address,
-      [
-        ...identities,
-        "-o",
-        "IdentitiesOnly=yes",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "PreferredAuthentications=publickey",
-        "-o",
-        "StrictHostKeyChecking=yes",
-      ],
-      command,
-    ),
-    { env: sshEnvironment(), timeoutMs, log, signal },
+    sshArgs(address, await keyOptions(false), command),
+    { env: sshEnvironment(), timeoutMs: 0, log, signal },
   );
+}
+
+export async function readAsRoot(
+  address: string,
+  command: string,
+  log?: Log,
+  limitMs = timeoutMs,
+): Promise<ProcessData> {
+  return readProcess(sshFile, sshArgs(address, await keyOptions(), command), {
+    env: sshEnvironment(),
+    timeoutMs: limitMs,
+    log,
+  });
+}
+
+export async function sendAsRoot(
+  address: string,
+  source: Readable,
+  command: string,
+  log?: Log,
+  limitMs = timeoutMs,
+): Promise<ProcessResult> {
+  return runProcess(
+    sshFile,
+    sshArgs(address, await keyOptions(), command, true),
+    { env: sshEnvironment(), timeoutMs: limitMs, log, source },
+  );
+}
+
+export async function saveAsRoot(
+  address: string,
+  command: string,
+  target: string,
+  log?: Log,
+  limitMs = timeoutMs,
+): Promise<ProcessSave> {
+  return saveProcess(
+    sshFile,
+    sshArgs(address, await keyOptions(), command),
+    target,
+    { env: sshEnvironment(), timeoutMs: limitMs, log },
+  );
+}
+
+function keepAwake(address: string): () => void {
+  const stopped = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  const wake = () => {
+    void runAsRoot(address, ":", undefined, stopped.signal, wakeTimeoutMs)
+      .catch(() => undefined)
+      .finally(() => {
+        if (!stopped.signal.aborted) {
+          timer = setTimeout(wake, wakeEveryMs);
+        }
+      });
+  };
+  timer = setTimeout(wake, wakeEveryMs);
+  return () => {
+    stopped.abort();
+    clearTimeout(timer);
+  };
+}
+
+export async function awake<Result>(
+  address: string,
+  run: () => Promise<Result>,
+): Promise<Result> {
+  const rest = keepAwake(address);
+  try {
+    return await run();
+  } finally {
+    rest();
+  }
 }

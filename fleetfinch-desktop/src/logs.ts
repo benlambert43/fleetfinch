@@ -11,7 +11,11 @@ export const logSourceLabels: Record<LogSource, string> = {
 };
 
 export const logLineLimit = 5000;
-export const logGroupLimit = 20;
+export const logGroupLimits: Record<LogSource, number> = {
+  app: 20,
+  computer: 20,
+  device: 60,
+};
 
 export type LogKind =
   "step" | "message" | "command" | "output" | "warning" | "error";
@@ -51,16 +55,29 @@ export interface LogGroup extends LogGroupInfo {
   lines: LogLine[];
 }
 
-export interface SshLogRefresh {
+export interface DeviceLogTail {
   enabled: boolean;
   paused: boolean;
 }
+
+export type LogDumpImport =
+  | {
+      state: "imported";
+      from: string;
+      file: string;
+      logs: number;
+      snapshots: number;
+      lines: number;
+      first: string | null;
+    }
+  | { state: "canceled" }
+  | { state: "failed"; message: string };
 
 export interface LogsSnapshot {
   seq: number;
   groups: LogGroup[];
   canReadDevices: boolean;
-  sshRefresh: SshLogRefresh;
+  deviceTail: DeviceLogTail;
 }
 
 export interface LogsUpdate {
@@ -69,7 +86,7 @@ export interface LogsUpdate {
   lines: { id: string; lines: LogLine[] }[];
   removed: string[];
   canReadDevices: boolean;
-  sshRefresh: SshLogRefresh;
+  deviceTail: DeviceLogTail;
 }
 
 export function keepLatest(

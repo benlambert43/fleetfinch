@@ -3,14 +3,11 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 
 import { type Device, deviceDetails, type DeviceRemoval } from "@/devices.ts";
 import { setDevices, useDevices } from "@/renderer/devices.ts";
+import { dialogButton } from "@/renderer/Panel.tsx";
 
 const countdownSeconds = 5;
 
-const dialogButton = `h-9 rounded-lg px-3 text-subheadline
-  focus-visible:outline-2 focus-visible:outline-offset-2
-  focus-visible:outline-menu-foreground aria-disabled:opacity-60`;
-
-function RemoveDeviceDialog({
+export function RemoveDeviceDialog({
   device,
   onClosed,
 }: {

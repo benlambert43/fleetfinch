@@ -98,6 +98,24 @@ function hasNews(before: Task, after: Task): boolean {
   );
 }
 
+export function finishedStep(step: TaskStep): TaskStep {
+  return { ...step, state: "done", detail: null, fraction: null };
+}
+
+export function settleSteps(
+  steps: readonly TaskStep[],
+  current: string,
+  change: Pick<TaskStep, "state" | "detail" | "fraction">,
+): TaskStep[] {
+  const index = steps.findIndex((step) => step.id === current);
+  return steps.map((step, position) => {
+    if (position < index) {
+      return finishedStep(step);
+    }
+    return position === index ? { ...step, ...change } : step;
+  });
+}
+
 export function useActivityOpen(): boolean {
   return useSyncExternalStore(subscribe, getOpen);
 }

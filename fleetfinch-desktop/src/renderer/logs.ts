@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from "react";
 
 import {
+  type DeviceLogTail,
   keepLatest,
+  type LogDumpImport,
   type LogGroup,
   type LogSource,
   type LogsUpdate,
-  type SshLogRefresh,
 } from "@/logs.ts";
 
 export const logsHref = "#/logs";
@@ -13,7 +14,9 @@ export const logsHref = "#/logs";
 interface Logs {
   groups: readonly LogGroup[];
   canReadDevices: boolean;
-  sshRefresh: SshLogRefresh;
+  deviceTail: DeviceLogTail;
+  importing: boolean;
+  imported: LogDumpImport | null;
   source: LogSource;
   selected: Record<LogSource, string | null>;
 }
@@ -21,7 +24,9 @@ interface Logs {
 let logs: Logs = {
   groups: [],
   canReadDevices: false,
-  sshRefresh: { enabled: false, paused: false },
+  deviceTail: { enabled: false, paused: false },
+  importing: false,
+  imported: null,
   source: "app",
   selected: { app: null, computer: null, device: null },
 };
@@ -88,7 +93,7 @@ function apply(update: LogsUpdate): void {
   emit({
     ...logs,
     canReadDevices: update.canReadDevices,
-    sshRefresh: update.sshRefresh,
+    deviceTail: update.deviceTail,
     groups: [...kept, ...created],
   });
 }
@@ -111,7 +116,7 @@ export const logsLoaded: Promise<void> = window.bridge
       ...logs,
       groups: snapshot.groups,
       canReadDevices: snapshot.canReadDevices,
-      sshRefresh: snapshot.sshRefresh,
+      deviceTail: snapshot.deviceTail,
     });
     settle();
   })
@@ -135,13 +140,36 @@ export function setLogSource(source: LogSource): void {
   }
 }
 
-export function setSshRefreshEnabled(enabled: boolean): void {
-  const previous = logs.sshRefresh;
-  emit({ ...logs, sshRefresh: { ...previous, enabled } });
-  window.bridge.setDeviceLogRefresh(enabled).catch((error: unknown) => {
-    console.error("The device log refresh setting could not be changed", error);
-    emit({ ...logs, sshRefresh: previous });
+export function setDeviceTailEnabled(enabled: boolean): void {
+  const previous = logs.deviceTail;
+  emit({ ...logs, deviceTail: { ...previous, enabled } });
+  window.bridge.setDeviceLogTail(enabled).catch((error: unknown) => {
+    console.error("The device log tail setting could not be changed", error);
+    emit({ ...logs, deviceTail: previous });
   });
+}
+
+export function importLogDump(address: string | null): void {
+  if (logs.importing) {
+    return;
+  }
+  emit({ ...logs, importing: true, imported: null });
+  void window.bridge
+    .importLogDump(address)
+    .catch((error: unknown): LogDumpImport => ({
+      state: "failed",
+      message: error instanceof Error ? error.message : String(error),
+    }))
+    .then((result) => {
+      const first = result.state === "imported" ? result.first : null;
+      emit({
+        ...logs,
+        importing: false,
+        imported: result.state === "canceled" ? null : result,
+        selected:
+          first === null ? logs.selected : { ...logs.selected, device: first },
+      });
+    });
 }
 
 export function selectLogGroup(source: LogSource, id: string): void {

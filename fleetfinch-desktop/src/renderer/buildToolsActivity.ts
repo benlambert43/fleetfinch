@@ -11,10 +11,11 @@ import {
 } from "@/buildTools.ts";
 import {
   appendTaskLog,
+  finishedStep as finished,
   recordCommand,
+  settleSteps as settle,
   startTask,
   type Task,
-  type TaskStep,
   updateTask,
 } from "@/renderer/activity.ts";
 
@@ -25,24 +26,6 @@ export type BuildToolsCheckOutcome =
   BuildToolsCheck | { state: "error"; message: string };
 
 const taskId = "build-tools";
-
-function finished(step: TaskStep): TaskStep {
-  return { ...step, state: "done", detail: null, fraction: null };
-}
-
-function settle(
-  steps: readonly TaskStep[],
-  current: string,
-  change: Pick<TaskStep, "state" | "detail" | "fraction">,
-): TaskStep[] {
-  const index = steps.findIndex((step) => step.id === current);
-  return steps.map((step, position) => {
-    if (position < index) {
-      return finished(step);
-    }
-    return position === index ? { ...step, ...change } : step;
-  });
-}
 
 function runningStep(task: Task): string {
   return (

@@ -7,6 +7,7 @@ import {
 } from "@fleetfinch/ui";
 import {
   Cog6ToothIcon,
+  DevicePhoneMobileIcon,
   DocumentTextIcon,
   HomeIcon,
 } from "@heroicons/react/24/outline";
@@ -23,6 +24,8 @@ import { BuildTools } from "@/renderer/BuildTools.tsx";
 import { DeviceBackup } from "@/renderer/DeviceBackup.tsx";
 import { DeviceSettings } from "@/renderer/DeviceSettings.tsx";
 import { Devices } from "@/renderer/Devices.tsx";
+import { devicesHref, isDevicesHash } from "@/renderer/devices.ts";
+import { DevicesPage } from "@/renderer/DevicesPage.tsx";
 import { Logs } from "@/renderer/Logs.tsx";
 import { logsHref } from "@/renderer/logs.ts";
 import { NativeThemeToggle } from "@/renderer/NativeThemeToggle.tsx";
@@ -37,6 +40,7 @@ const settingsHref = "#/settings";
 
 const links: SidebarLink[] = [
   { href: homeHref, label: "Home", icon: HomeIcon },
+  { href: devicesHref, label: "Devices", icon: DevicePhoneMobileIcon },
   { href: logsHref, label: "Logs", icon: DocumentTextIcon },
   { href: settingsHref, label: "Settings", icon: Cog6ToothIcon },
 ];
@@ -71,6 +75,9 @@ function subscribe(listener: () => void): () => void {
 
 function currentHref(): string {
   const { hash } = window.location;
+  if (isDevicesHash(hash)) {
+    return devicesHref;
+  }
   return links.some((link) => link.href === hash) ? hash : homeHref;
 }
 
@@ -124,6 +131,11 @@ export function App() {
                 </div>
               </div>
             </AppShell>
+          </Activity>
+          <Activity mode={visibleOn(devicesHref, current)}>
+            <Suspense>
+              <DevicesPage />
+            </Suspense>
           </Activity>
           <Activity mode={visibleOn(logsHref, current)}>
             <Suspense>

@@ -9,6 +9,12 @@ import type {
   BuildToolsStatus,
 } from "@/buildTools.ts";
 import type {
+  DeviceInventoryResult,
+  DevicePackageInstall,
+  DevicePackageRemoval,
+  DeviceTaskEvent,
+} from "@/deviceApps.ts";
+import type {
   BackupExport,
   BackupRestore,
   Device,
@@ -16,7 +22,7 @@ import type {
   DeviceLogin,
   DeviceRemoval,
 } from "@/devices.ts";
-import type { LogsSnapshot, LogsUpdate } from "@/logs.ts";
+import type { LogDumpImport, LogsSnapshot, LogsUpdate } from "@/logs.ts";
 import type { MenuAction } from "@/menu.ts";
 
 export const windowMaximizedChannel = "windowMaximized";
@@ -38,7 +44,17 @@ export interface BridgeMethods {
   removeDevice: (address: string, revoke: boolean) => Promise<DeviceRemoval>;
   exportBackup: (password: string) => Promise<BackupExport>;
   restoreBackup: (password: string) => Promise<BackupRestore>;
-  setDeviceLogRefresh: (enabled: boolean) => Promise<void>;
+  setDeviceLogTail: (enabled: boolean) => Promise<void>;
+  importLogDump: (address: string | null) => Promise<LogDumpImport>;
+  getDeviceApps: (address: string) => Promise<DeviceInventoryResult>;
+  installDevicePackage: (
+    address: string,
+    expected: string | null,
+  ) => Promise<DevicePackageInstall>;
+  removeDevicePackage: (
+    address: string,
+    id: string,
+  ) => Promise<DevicePackageRemoval>;
 }
 
 export interface Bridge extends BridgeMethods {
@@ -51,6 +67,7 @@ export interface Bridge extends BridgeMethods {
   ) => () => void;
   onBuildToolsLog: (listener: (line: BuildToolsLogLine) => void) => () => void;
   onLogs: (listener: (update: LogsUpdate) => void) => () => void;
+  onDeviceTask: (listener: (event: DeviceTaskEvent) => void) => () => void;
 }
 
 declare global {

@@ -1,10 +1,11 @@
 import { app, BrowserWindow } from "electron";
 
 import {
+  type DeviceLogTail,
   type LogEntry,
   type LogGroup,
   type LogGroupInfo,
-  logGroupLimit,
+  logGroupLimits,
   type LogGroupState,
   type LogKind,
   type LogLine,
@@ -13,10 +14,10 @@ import {
   type LogsSnapshot,
   type LogSource,
   type LogsUpdate,
-  type SshLogRefresh,
 } from "@/logs.ts";
 
 export interface LogWriter {
+  id: string;
   log: (entry: LogEntry) => void;
   finish: (
     state: Exclude<LogGroupState, "running">,
@@ -32,7 +33,7 @@ const pendingLines = new Map<string, LogLine[]>();
 const pendingRemoved = new Set<string>();
 let pendingStatus = false;
 let canReadDevices = false;
-let sshRefresh: SshLogRefresh = { enabled: false, paused: false };
+let deviceTail: DeviceLogTail = { enabled: false, paused: false };
 let nextGroupId = 0;
 let nextLineId = 0;
 let seq = 0;
@@ -42,7 +43,7 @@ function info({ lines: _lines, ...group }: LogGroup): LogGroupInfo {
   return group;
 }
 
-function flush(): void {
+export function flushLogs(): void {
   clearTimeout(flushTimer);
   flushTimer = undefined;
   if (
@@ -63,7 +64,7 @@ function flush(): void {
     })),
     removed: [...pendingRemoved],
     canReadDevices,
-    sshRefresh,
+    deviceTail,
   };
   pendingGroups.clear();
   pendingLines.clear();
@@ -77,7 +78,7 @@ function flush(): void {
 }
 
 function scheduleFlush(): void {
-  flushTimer ??= setTimeout(flush, flushDelayMs);
+  flushTimer ??= setTimeout(flushLogs, flushDelayMs);
 }
 
 function changed(group: LogGroup): void {
@@ -90,7 +91,7 @@ function prune(source: LogSource): void {
     (group) => group.source === source,
   );
   const finished = ofSource.filter((group) => group.state !== "running");
-  const extra = Math.max(0, ofSource.length - logGroupLimit);
+  const extra = Math.max(0, ofSource.length - logGroupLimits[source]);
   for (const { id } of finished.slice(0, extra)) {
     groups.delete(id);
     pendingGroups.delete(id);
@@ -120,6 +121,7 @@ export function openLogGroup(
   prune(source);
   changed(group);
   return {
+    id: group.id,
     log: ({ kind, text }) => {
       if (!groups.has(group.id)) {
         return;
@@ -148,8 +150,8 @@ export function openLogGroup(
 }
 
 export function readLogs(): LogsSnapshot {
-  flush();
-  return { seq, groups: [...groups.values()], canReadDevices, sshRefresh };
+  flushLogs();
+  return { seq, groups: [...groups.values()], canReadDevices, deviceTail };
 }
 
 export function setCanReadDevices(value: boolean): void {
@@ -160,12 +162,12 @@ export function setCanReadDevices(value: boolean): void {
   }
 }
 
-export function setSshRefresh(value: SshLogRefresh): void {
+export function setDeviceTail(value: DeviceLogTail): void {
   if (
-    sshRefresh.enabled !== value.enabled ||
-    sshRefresh.paused !== value.paused
+    deviceTail.enabled !== value.enabled ||
+    deviceTail.paused !== value.paused
   ) {
-    sshRefresh = value;
+    deviceTail = value;
     pendingStatus = true;
     scheduleFlush();
   }

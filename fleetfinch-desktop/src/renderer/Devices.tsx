@@ -2,7 +2,7 @@ import { DevicePhoneMobileIcon } from "@heroicons/react/20/solid";
 
 import { deviceDetails } from "@/devices.ts";
 import { AddDevice } from "@/renderer/AddDevice.tsx";
-import { useDevices } from "@/renderer/devices.ts";
+import { deviceHref, useDevices } from "@/renderer/devices.ts";
 import {
   EmptyState,
   PanelActions,
@@ -38,6 +38,7 @@ export function Devices() {
                 />
               }
               title={device.name ?? device.address}
+              href={deviceHref(device.address)}
               description={deviceDetails(device)}
             />
           ))}

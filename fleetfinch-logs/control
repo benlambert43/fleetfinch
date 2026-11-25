@@ -1,0 +1,12 @@
+Package: com.fleetfinch.logs
+Name: Finch Logs
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Records what the system, its services and its apps are doing
+ A service that starts with the device and keeps detailed logs of the boot,
+ the system log, processes, services, apps, resources, power and network,
+ with an app to read them on the device.
+Maintainer: FleetFinch
+Author: FleetFinch
+Section: Utilities
+Depends: firmware (>= 9.0)

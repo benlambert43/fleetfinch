@@ -168,7 +168,18 @@ function DeviceForm({
   );
 }
 
-export function AddDevice() {
+const placements = {
+  panels: `top-[calc(anchor(top)-10px)] right-[calc(anchor(right)-10px)]
+    bottom-[calc(anchor(bottom)-10px)] left-[calc(anchor(left)-10px)] size-auto
+    max-h-none max-w-none p-4 [position-anchor:--home-panels]`,
+  center: "m-auto w-[calc(100%-2rem)] max-w-md px-4 py-10",
+} as const;
+
+export function AddDevice({
+  placement = "panels",
+}: {
+  placement?: keyof typeof placements;
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [opening, setOpening] = useState(0);
@@ -191,12 +202,9 @@ export function AddDevice() {
         onClose={() => {
           setOpening((count) => count + 1);
         }}
-        className="top-[calc(anchor(top)-10px)] right-[calc(anchor(right)-10px)]
-          bottom-[calc(anchor(bottom)-10px)] left-[calc(anchor(left)-10px)]
-          size-auto max-h-none max-w-none rounded-2xl border-2
-          border-menu-border bg-menu p-4 text-menu-foreground shadow-lg
-          [position-anchor:--home-panels] backdrop:bg-background/60
-          backdrop:backdrop-blur-xs"
+        className={`rounded-2xl border-2 border-menu-border bg-menu
+          text-menu-foreground shadow-lg backdrop:bg-background/60
+          backdrop:backdrop-blur-xs ${placements[placement]}`}
       >
         <div className="grid size-full place-items-center">
           <DeviceForm

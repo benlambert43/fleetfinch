@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
 import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
+import { finished } from "node:stream/promises";
 import { stripVTControlCharacters } from "node:util";
 
 import type {
@@ -14,7 +16,20 @@ export interface ProcessResult {
   output: string;
 }
 
+export interface ProcessData {
+  code: number | null;
+  data: Buffer;
+  errors: string;
+}
+
+export interface ProcessSave {
+  code: number | null;
+  bytes: number;
+  errors: string;
+}
+
 const outputLimit = 64 * 1024;
+const dataLimit = 64 * 1024 * 1024;
 const defaultTimeoutMs = 30 * 60 * 1000;
 const plainArgument = /^[\w@%+=:,./-]+$/;
 
@@ -60,6 +75,7 @@ export interface ProcessOptions {
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   input?: string;
+  source?: Readable | undefined;
   answer?: { prompt: RegExp; text: string };
   log?: Log | undefined;
   signal?: AbortSignal | undefined;
@@ -100,6 +116,7 @@ export function runProcess(
     env = process.env,
     timeoutMs = defaultTimeoutMs,
     input,
+    source,
     answer,
     log,
     signal,
@@ -127,14 +144,122 @@ export function runProcess(
       }
     };
     child.stdin.on("error", () => undefined);
-    if (answer === undefined) {
+    if (source !== undefined) {
+      source.on("error", (error) => {
+        child.kill();
+        reject(error);
+      });
+      source.pipe(child.stdin);
+    } else if (answer === undefined) {
       child.stdin.end(input);
     }
     child.stdout.on("data", take);
     child.stderr.on("data", take);
     child.on("error", reject);
     child.on("close", (code) => {
+      source?.destroy();
       resolve({ code, output });
+    });
+  });
+}
+
+export function readProcess(
+  file: string,
+  args: string[],
+  {
+    env = process.env,
+    timeoutMs = defaultTimeoutMs,
+    log,
+    signal,
+  }: ProcessOptions = {},
+): Promise<ProcessData> {
+  return new Promise((resolve, reject) => {
+    log?.({ kind: "command", text: commandText(file, args) });
+    const child = spawn(file, args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: timeoutMs,
+      signal,
+    });
+    if (log) {
+      logLines(child.stderr, log);
+    }
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let errors = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > dataLimit) {
+        child.kill();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      errors = (errors + chunk.toString("utf8")).slice(-outputLimit);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        code: size > dataLimit ? null : code,
+        data: Buffer.concat(chunks),
+        errors,
+      });
+    });
+  });
+}
+
+export function saveProcess(
+  file: string,
+  args: string[],
+  target: string,
+  {
+    env = process.env,
+    timeoutMs = defaultTimeoutMs,
+    log,
+    signal,
+  }: ProcessOptions = {},
+): Promise<ProcessSave> {
+  return new Promise((resolve, reject) => {
+    log?.({ kind: "command", text: commandText(file, args) });
+    const child = spawn(file, args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: timeoutMs,
+      signal,
+    });
+    if (log) {
+      logLines(child.stderr, log);
+    }
+    const sink = createWriteStream(target, { mode: 0o600 });
+    const written = finished(sink).then(
+      () => null,
+      (error: unknown) => {
+        child.kill();
+        return error instanceof Error ? error : new Error(String(error));
+      },
+    );
+    let bytes = 0;
+    let errors = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    child.stdout.pipe(sink);
+    child.stderr.on("data", (chunk: Buffer) => {
+      errors = (errors + chunk.toString("utf8")).slice(-outputLimit);
+    });
+    child.on("error", (error) => {
+      sink.destroy();
+      reject(error);
+    });
+    child.on("close", (code) => {
+      void written.then((problem) => {
+        if (problem === null) {
+          resolve({ code, bytes, errors });
+        } else {
+          reject(problem);
+        }
+      });
     });
   });
 }

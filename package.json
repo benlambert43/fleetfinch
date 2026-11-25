@@ -23,6 +23,7 @@
     "build": "npm run build --workspace fleetfinch-web",
     "build:desktop": "npm run build --workspace fleetfinch-desktop",
     "make:desktop": "npm run make --workspace fleetfinch-desktop",
+    "build:logs": "make -C fleetfinch-logs package",
     "db:start": "docker compose -f docker-compose.dev.yml up --detach --wait --wait-timeout 60 && npm run db:migrate",
     "db:stop": "docker compose -f docker-compose.dev.yml down",
     "db:generate": "npm run db:generate --workspace fleetfinch-server",
