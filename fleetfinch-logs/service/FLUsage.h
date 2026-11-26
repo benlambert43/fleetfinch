@@ -19,6 +19,7 @@
           from:(NSDate *)from
             to:(NSDate *)to;
 - (void)missed:(NSString *)starter at:(NSDate *)when;
+- (void)inFront:(NSString *)identifier name:(NSString *)name path:(NSString *)path;
 - (void)rebase:(FLProcess *)process processor:(double)processor;
 - (void)seen:(FLProcess *)process;
 - (void)ended:(FLProcess *)process processor:(NSNumber *)processor memory:(NSNumber *)memory;
@@ -28,6 +29,10 @@
            at:(NSDate *)when;
 - (void)keepOnly:(NSSet<NSString *> *)identities;
 - (void)service:(NSString *)label endedWith:(NSString *)ending;
+- (void)service:(NSString *)label
+       launched:(NSUInteger)runs
+         reason:(NSString *)reason
+        program:(NSString *)program;
 - (void)logged:(FLLevel)level by:(NSString *)sender pid:(int)pid;
 - (void)reported:(NSString *)name kind:(NSString *)kind path:(NSString *)path;
 - (NSDictionary *)contents;

@@ -115,9 +115,29 @@ static NSArray<NSString *> *FLUsageKinds(void) {
     origin = [NSString stringWithFormat:@"%@ · %@", origin, FLFormatBytes(bytes)];
   }
   if (![row[@"ran"] boolValue]) {
-    return [NSString stringWithFormat:@"Never ran · from %@", origin];
+    NSDate *read = row[@"read"];
+    NSString *seen = [read isKindOfClass:[NSDate class]]
+      ? [NSString stringWithFormat:@" · its file was read %@", FLAgo(read)]
+      : @"";
+    return [NSString stringWithFormat:@"Never ran%@ · from %@", seen, origin];
+  }
+  NSUInteger launches = [row[@"launches"] unsignedIntegerValue];
+  if ([row[@"runs"] unsignedIntegerValue] == 0 && launches > 0) {
+    return [NSString stringWithFormat:@"launchd started it %@ while Finch Logs was not "
+                                      @"watching · from %@",
+                                      launches == 1 ? @"once" : FLCount(launches, @"time"),
+                                      origin];
   }
   NSString *runs = FLCount([row[@"runs"] unsignedIntegerValue], @"run");
+  if ([row[@"kind"] isEqualToString:@"app"]) {
+    NSUInteger fronts = [row[@"fronts"] unsignedIntegerValue];
+    NSString *front = fronts == 0
+      ? @"Never in front"
+      : [NSString stringWithFormat:@"In front %@, %@ in all",
+                                   fronts == 1 ? @"once" : [FLCount(fronts, @"time") description],
+                                   FLFormatDuration([row[@"frontSeconds"] doubleValue])];
+    runs = [NSString stringWithFormat:@"%@ · %@", front, runs];
+  }
   NSString *work =
     [NSString stringWithFormat:@"%.1fs of processor", [row[@"processor"] doubleValue]];
   NSDate *last = row[@"last"];
@@ -147,11 +167,27 @@ static NSArray<NSString *> *FLUsageKinds(void) {
     state = running == 1 ? @"Running now"
                          : [NSString stringWithFormat:@"Running now, %lu times over",
                                                       (unsigned long)running];
+  } else if (ran && [row[@"runs"] unsignedIntegerValue] == 0 &&
+             [row[@"launches"] unsignedIntegerValue] > 0) {
+    state = @"Not running; it ran while Finch Logs was not watching";
   } else if (ran) {
     state = @"Not running";
   }
   [pairs addObject:@[ @"State", state ]];
-  if (ran) {
+  if (ran && [kind isEqualToString:@"app"]) {
+    NSDate *front = row[@"lastFront"];
+    [pairs addObject:@[ @"Times in front", [row[@"fronts"] description] ?: @"0" ]];
+    [pairs addObject:@[
+      @"Time in front", FLFormatDuration([row[@"frontSeconds"] doubleValue])
+    ]];
+    [pairs addObject:@[
+      @"Last in front", [front isKindOfClass:[NSDate class]] ? FLFormatDay(front) : @""
+    ]];
+  }
+  if (!ran && [row[@"read"] isKindOfClass:[NSDate class]]) {
+    [pairs addObject:@[ @"Its file was read", FLFormatDay(row[@"read"]) ]];
+  }
+  if (ran && [row[@"runs"] unsignedIntegerValue] > 0) {
     NSDate *first = row[@"first"];
     NSDate *last = row[@"last"];
     [pairs addObject:@[ @"Runs seen", [row[@"runs"] description] ?: @"0" ]];
@@ -165,10 +201,16 @@ static NSArray<NSString *> *FLUsageKinds(void) {
       @"Most memory", FLFormatBytes([row[@"memory"] unsignedLongLongValue])
     ]];
     [pairs addObject:@[ @"Started by", row[@"starters"] ?: @"" ]];
-    if ([row[@"endings"] length] > 0) {
-      [pairs addObject:@[ @"Ended with", row[@"endings"] ]];
-    }
     [pairs addObject:@[ @"Ran as", row[@"user"] ?: @"" ]];
+  }
+  if ([row[@"launches"] unsignedIntegerValue] > 0) {
+    [pairs addObject:@[
+      @"Started by launchd", FLCount([row[@"launches"] unsignedIntegerValue], @"time")
+    ]];
+    [pairs addObject:@[ @"Why", row[@"why"] ?: @"" ]];
+  }
+  if (ran && [row[@"endings"] length] > 0) {
+    [pairs addObject:@[ @"Ended with", row[@"endings"] ]];
   }
   [pairs addObject:@[ @"Trouble", row[@"trouble"] ?: @"" ]];
   [pairs addObject:@[ [kind isEqualToString:@"service"] ? @"Program" : @"Path",
@@ -251,10 +293,15 @@ static NSArray<NSString *> *FLUsageKinds(void) {
     ? @""
     : @" What is installed has not been listed yet, so apps, extensions and programs that "
       @"have never run are missing.";
+  NSString *fronted = [kind isEqualToString:@"app"]
+    ? [NSString stringWithFormat:@", %@ been in front", counts[@"front"] ?: @0]
+    : [NSString stringWithFormat:@", %@ of those with their file read", counts[@"read"] ?: @0];
   section.footer = [NSString
-    stringWithFormat:@"%@ found, %@ never seen running. Counted since %@, with the device awake "
-                     @"for %@ of that time. A run of only a few milliseconds can go unnamed.%@",
-                     counts[@"total"] ?: @0, counts[@"never"] ?: @0,
+    stringWithFormat:@"%@ found, %@ never seen running%@. Counted since %@, with the device "
+                     @"awake for %@ of that time. A run of only a few milliseconds can go "
+                     @"unnamed. iOS starts some apps by itself where nobody sees them, so an "
+                     @"app can have run without being in front.%@",
+                     counts[@"total"] ?: @0, counts[@"never"] ?: @0, fronted,
                      [began isKindOfClass:[NSDate class]] ? FLFormatDay(began) : @"the start",
                      FLFormatDuration([report[@"watched"] doubleValue]), unlisted];
   return @[ section ];

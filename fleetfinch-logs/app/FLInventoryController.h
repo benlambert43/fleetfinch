@@ -5,6 +5,7 @@
 @interface FLInventoryController : FLListController
 
 + (NSDictionary *)inventory;
++ (NSDictionary *)startup;
 + (FLDependencyIndex *)index;
 + (NSDate *)listed;
 

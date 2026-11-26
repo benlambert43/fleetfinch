@@ -8,6 +8,7 @@
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLDependencyIndex.h"
+#import "FLInventory.h"
 #import "FLMachO.h"
 #import "FLStatus.h"
 
@@ -226,13 +227,16 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
       if (node.cache != nil) {
         node.image = FLReadImage(node.cache.handle, node.offset);
       } else {
-        int handle = open(node.path.fileSystemRepresentation, O_RDONLY);
+        const char *file = node.path.fileSystemRepresentation;
+        FLFileTimes before = FLFileTimesAt(file);
+        int handle = open(file, O_RDONLY);
         if (handle >= 0) {
           node.image = FLReadImageFile(handle);
           if ([node.image isProgram]) {
             node.entitlements = FLReadEntitlements(handle, node.image);
           }
           close(handle);
+          FLPutBackAccessTime(file, before);
         }
       }
       _unread += node.image == nil ? 1 : 0;
@@ -448,10 +452,13 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
           [set scan:node.cache.handle offset:offset size:image.stringsSize into:found];
         }
       } else if (image.stringsSize > 0) {
-        int handle = open(node.path.fileSystemRepresentation, O_RDONLY);
+        const char *file = node.path.fileSystemRepresentation;
+        FLFileTimes before = FLFileTimesAt(file);
+        int handle = open(file, O_RDONLY);
         if (handle >= 0) {
           [set scan:handle offset:image.stringsOffset size:image.stringsSize into:found];
           close(handle);
+          FLPutBackAccessTime(file, before);
         }
       }
       [self note:found meanings:meanings for:node];
@@ -477,6 +484,15 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
   return reached;
 }
 
+- (BOOL)wasRead:(FLNode *)node {
+  NSDate *counting = _inventory[@"reading"][@"began"];
+  NSDictionary *item = node.item;
+  BOOL single = [@[ @"program", @"library" ] containsObject:item[@"kind"] ?: @""];
+  NSDate *read = single ? item[@"lastRead"] : item[@"binaryRead"];
+  return node.cache == nil && [counting isKindOfClass:[NSDate class]] &&
+         [read isKindOfClass:[NSDate class]] && [read compare:counting] != NSOrderedAscending;
+}
+
 - (void)classify {
   NSDictionary *entries = _usage[@"entries"];
   if (![entries isKindOfClass:[NSDictionary class]] || entries.count == 0) {
@@ -487,7 +503,8 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
   for (FLNode *node in _nodes) {
     if ([node.image isProgram]) {
       [programs addObject:node];
-      if (entries[[@"program:" stringByAppendingString:node.path]] != nil) {
+      if (entries[[@"program:" stringByAppendingString:node.path]] != nil ||
+          [self wasRead:node]) {
         [ran addObject:node];
       }
     }
@@ -511,6 +528,8 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
       node.need = @"loaded";
     } else if ([seen isKindOfClass:[NSDictionary class]] && seen[node.path] != nil) {
       node.need = @"seen";
+    } else if ([self wasRead:node]) {
+      node.need = @"read";
     } else if ([opened containsIndex:node.index]) {
       node.need = @"opened";
     } else if ([named containsIndex:node.index]) {
@@ -633,6 +652,9 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
   [self noteOffers];
   [self scan];
   [self classify];
+  for (FLSharedCache *cache in _caches) {
+    [cache settle];
+  }
   NSMutableDictionary *counted = [NSMutableDictionary new];
   [self countInto:counted];
   NSMutableArray<NSDictionary *> *nodes = [NSMutableArray new];
@@ -865,7 +887,7 @@ static NSString *FLRunsOf(NSDictionary *node, NSDictionary *usage) {
   NSDate *began = usage[@"began"];
   NSString *since = [began isKindOfClass:[NSDate class]] ? FLFormatDay(began) : @"the start";
   NSDictionary *entry = entries[[@"program:" stringByAppendingString:node[@"path"] ?: @""]];
-  if (entry == nil) {
+  if ([entry[@"runs"] unsignedIntegerValue] == 0) {
     return [NSString stringWithFormat:@"never, counted since %@", since];
   }
   NSDate *last = entry[@"last"];
@@ -908,6 +930,11 @@ NSString *FLDependsText(NSDictionary *dependencies, NSDictionary *inventory, NSS
   }
   if (node[@"need"] != nil) {
     [text appendFormat:@"Needed: %@\n", FLNeedText(node[@"need"])];
+  }
+  NSString *reading = FLReadingOf(item);
+  NSDate *counting = inventory[@"reading"][@"began"];
+  if (reading.length > 0 && [counting isKindOfClass:[NSDate class]]) {
+    [text appendFormat:@"Read since %@: %@\n", FLFormatDay(counting), reading];
   }
   if ([node[@"shadowed"] boolValue]) {
     [text appendString:@"A library of the same name in the shared cache is loaded instead of "

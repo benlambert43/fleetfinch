@@ -42,6 +42,7 @@ export const finchSnapshotTitles: Record<string, string> = {
   calls: "System Calls",
   opened: "Files Reached",
   talks: "Connections Between Programs",
+  touched: "Files Read",
   candidates: "What Looks Unused",
 };
 

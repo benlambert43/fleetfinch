@@ -1,5 +1,7 @@
 #import <Foundation/Foundation.h>
+#import <fcntl.h>
 #import <notify.h>
+#import <sys/file.h>
 #import <sys/resource.h>
 #import <sys/utsname.h>
 
@@ -17,6 +19,7 @@
 #import "FLStatus.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
+#import "FLTouched.h"
 #import "FLTrace.h"
 #import "FLUsage.h"
 
@@ -26,6 +29,7 @@ static const int64_t FLUsageWait = 5;
 static const int FLHelperNiceness = 10;
 static NSString *const FLInventorySnapshot = @"inventory";
 static NSString *const FLDependenciesSnapshot = @"dependencies";
+static NSString *const FLListingLock = @"listing.lock";
 
 static void FLPrint(NSString *text) {
   NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
@@ -82,6 +86,12 @@ static int FLShowUsage(void) {
           @"                                   record every system call, kernel trap and file\n"
           @"                                   lookup for S seconds (20 unless told), and with\n"
           @"                                   --name, everything one program did\n"
+          @"  finchlog touched [PATH] [--fresh] [--starting]\n"
+          @"                                   what has been read since the count began and\n"
+          @"                                   what never has, going by the time of last\n"
+          @"                                   reading the file system keeps; with PATH, each\n"
+          @"                                   file under it; --starting lists what the device\n"
+          @"                                   read while it was starting\n"
           @"  finchlog candidates              what nothing recorded so far has used, by size\n"
           @"  finchlog calls | opened | talks  what the traces have gathered: the calls each\n"
           @"                                   program makes, which parts of the system had\n"
@@ -313,12 +323,25 @@ static NSString *FLFirstWord(NSArray<NSString *> *arguments) {
 }
 
 static NSDictionary *FLListAgain(NSDictionary **dependencies, BOOL *saved) {
+  *saved = NO;
+  if (getuid() != 0) {
+    fprintf(stderr, "finchlog: only root can list what is installed, because listing it reads "
+                    "every program\n");
+    return nil;
+  }
+  NSString *lock = [FLStatePath() stringByAppendingPathComponent:FLListingLock];
+  int held = open(lock.fileSystemRepresentation, O_RDWR | O_CREAT, 0600);
+  if (held >= 0) {
+    flock(held, LOCK_EX);
+  }
   NSDictionary *inventory = FLGatherInventory();
-  BOOL root = getuid() == 0;
-  *saved = !root || FLSaveInventory(inventory);
+  *saved = FLSaveInventory(inventory);
   *dependencies = FLGatherDependencies(inventory, FLReadState(FLUsageState));
-  if (root && *saved) {
+  if (*saved) {
     *saved = FLSaveDependencies(*dependencies) && FLSaveInventory(inventory);
+  }
+  if (held >= 0) {
+    close(held);
   }
   return inventory;
 }
@@ -562,6 +585,21 @@ int main(int argc, char **argv) {
       return FLChangeCommand(command, arguments, ^{
         FLAskToSave();
       });
+    }
+    if ([command isEqualToString:@"touched"]) {
+      if ([arguments containsObject:@"--fresh"]) {
+        NSDictionary *dependencies = nil;
+        BOOL saved = NO;
+        FLListAgain(&dependencies, &saved);
+        if (!saved) {
+          fprintf(stderr, "finchlog: what is installed could not be listed again\n");
+          return 1;
+        }
+      }
+      int shown = FLTouchedCommand(arguments);
+      if (shown >= 0) {
+        return shown;
+      }
     }
     if (FLReportKindNamed(command) != nil) {
       return FLShowReport(@[ command ]);

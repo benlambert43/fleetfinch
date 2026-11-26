@@ -1,6 +1,5 @@
 #import "FLTrace.h"
 
-#import <mach/mach_time.h>
 #import <signal.h>
 #import <sys/sysctl.h>
 #import <unistd.h>
@@ -113,14 +112,6 @@ static int FLTraceAsk(int operation, int value, void *data, size_t *size) {
   int name[4] = {CTL_KERN, FLTraceControl, operation, value};
   size_t none = 0;
   return sysctl(name, value >= 0 ? 4 : 3, data, size ?: &none, NULL, 0);
-}
-
-static NSTimeInterval FLAwakeSeconds(void) {
-  static mach_timebase_info_data_t base;
-  if (base.denom == 0) {
-    mach_timebase_info(&base);
-  }
-  return (double)mach_absolute_time() * base.numer / base.denom / NSEC_PER_SEC;
 }
 
 static BOOL FLTraceInUse(void) {
@@ -1203,8 +1194,13 @@ int FLTraceCommand(NSArray<NSString *> *arguments) {
   NSMutableDictionary *ledger = FLLedgerToAddTo();
   [session mergeInto:ledger];
   BOOL saved = FLWriteCompactState(FLTracedState, ledger);
+  NSMutableDictionary<NSString *, NSDictionary *> *read = [NSMutableDictionary new];
+  read[FLTracedState] = ledger;
   FLReportSource source = ^NSDictionary *(NSString *name) {
-    return [name isEqualToString:FLTracedState] ? ledger : FLReadState(name);
+    if (read[name] == nil) {
+      read[name] = FLReadState(name) ?: @{};
+    }
+    return read[name];
   };
   for (NSString *kind in FLTracedReportKinds()) {
     @autoreleasepool {

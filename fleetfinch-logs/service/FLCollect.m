@@ -514,7 +514,10 @@ void FLEachLaunchDefinition(void (^visit)(NSDictionary *service, NSDictionary *p
       }
       @autoreleasepool {
         NSString *file = [folder stringByAppendingPathComponent:name];
-        NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:file];
+        __block NSDictionary *plist = nil;
+        FLKeepingAccessTime(file, ^{
+          plist = [NSDictionary dictionaryWithContentsOfFile:file];
+        });
         if (![plist isKindOfClass:[NSDictionary class]]) {
           continue;
         }

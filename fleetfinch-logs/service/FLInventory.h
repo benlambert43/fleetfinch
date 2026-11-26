@@ -7,6 +7,7 @@ NSDictionary *FLGatherInventory(void);
 BOOL FLSaveInventory(NSDictionary *inventory);
 NSString *FLInventoryText(NSDictionary *inventory, NSString *kind);
 NSString *FLInventorySummary(NSDictionary *inventory);
+NSString *FLReadingOf(NSDictionary *item);
 NSString *FLInventoryMarks(void);
 NSDictionary<NSString *, NSString *> *FLPackageOwners(void);
 NSString *FLOriginOf(NSDictionary<NSString *, NSString *> *owners, NSArray<NSString *> *paths);

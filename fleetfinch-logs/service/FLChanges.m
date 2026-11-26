@@ -19,6 +19,7 @@
 #import "FLStatus.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
+#import "FLTouched.h"
 
 extern char **environ;
 
@@ -423,7 +424,27 @@ BOOL FLPathIsKept(NSString *path, NSString *program, NSSet<NSString *> *kept) {
   return NO;
 }
 
-static NSString *FLRefusal(NSString *path, NSDictionary *service, BOOL force) {
+static NSUInteger FLProgramsAmong(NSArray<NSString *> *files, NSDictionary *inventory) {
+  NSMutableSet<NSString *> *programs = [NSMutableSet new];
+  for (NSDictionary *item in inventory[@"items"]) {
+    BOOL single = [@[ @"program", @"library" ] containsObject:item[@"kind"] ?: @""];
+    for (NSString *file in @[ single ? item[@"path"] ?: @"" : @"", item[@"program"] ?: @"",
+                              item[@"binary"] ?: @"" ]) {
+      if (file.length > 0) {
+        [programs addObject:file];
+      }
+    }
+  }
+  NSUInteger count = 0;
+  for (NSString *file in files) {
+    count += [programs containsObject:file] ? 1 : 0;
+  }
+  return count;
+}
+
+static NSString *FLRefusal(NSString *path, NSDictionary *service, BOOL force,
+                           NSDictionary *inventory, FLDependencyIndex *index,
+                           NSDictionary *found) {
   struct stat info;
   struct statfs volume;
   if (lstat(path.fileSystemRepresentation, &info) != 0) {
@@ -448,14 +469,10 @@ static NSString *FLRefusal(NSString *path, NSDictionary *service, BOOL force) {
                                       @"instead",
                                       path, package];
   }
-  NSDictionary *inventory = FLReadState(FLInventoryState);
-  NSDictionary *dependencies = FLReadState(FLDependenciesState);
-  if (inventory.count == 0 || dependencies.count == 0) {
+  if (inventory.count == 0 || index == nil) {
     return @"what is installed and what depends on what have not been worked out yet. Run "
            @"finchlog depends --fresh first";
   }
-  FLDependencyIndex *index = [[FLDependencyIndex alloc] initWithDependencies:dependencies
-                                                                   inventory:inventory];
   for (NSString *used in [index pathsLinkedFrom:FLWayBack()]) {
     if (FLIsInside(used, path) || FLIsInside(path, used)) {
       return [NSString stringWithFormat:@"%@ stays where it is: Finch Logs, launchd, the "
@@ -463,7 +480,7 @@ static NSString *FLRefusal(NSString *path, NSDictionary *service, BOOL force) {
                                         path, used];
     }
   }
-  NSDictionary *loaded = FLReadState(FLLoadedState);
+  NSDictionary *loaded = index.loaded;
   NSDictionary *libraries = loaded[@"libraries"];
   for (NSString *library in [libraries isKindOfClass:[NSDictionary class]] ? libraries : @{}) {
     if (!FLIsInside(library, path)) {
@@ -498,6 +515,17 @@ static NSString *FLRefusal(NSString *path, NSDictionary *service, BOOL force) {
                                         @"service that starts it first, or add --force",
                                         process.path, process.pid];
     }
+  }
+  NSArray<NSString *> *early = found[@"starting"];
+  NSUInteger run = FLProgramsAmong(early, inventory);
+  if (early.count > 0 && (![item[@"kind"] isEqualToString:@"app"] || run > 0)) {
+    NSString *programs = run == 0
+      ? @""
+      : [NSString stringWithFormat:@", %@ of them a program or a library", @(run)];
+    return [NSString stringWithFormat:@"%@ stays where it is: the device read %@ in it while "
+                                      @"starting%@. Add --force to set it aside anyway",
+                                      path, FLReportCount(early.count, @"file", @"files"),
+                                      programs];
   }
   if ([item[@"need"] isEqualToString:@"loaded"]) {
     return [NSString stringWithFormat:@"%@ is linked by %@ programs and libraries, and at least "
@@ -564,22 +592,65 @@ static NSArray<NSString *> *FLStartersOf(NSString *path) {
   return labels;
 }
 
+static void FLSayReading(NSDictionary *found, NSDictionary *inventory) {
+  NSDictionary *reading = inventory[@"reading"];
+  NSDate *counting = reading[@"began"];
+  long long last = [found[@"last"] longLongValue];
+  if (found == nil || ![counting isKindOfClass:[NSDate class]]) {
+    return;
+  }
+  printf("%s of its %s files have been read since %s, and %s since the device last started. %s\n",
+         [found[@"read"] description].UTF8String, [found[@"files"] description].UTF8String,
+         FLFormatDay(counting).UTF8String, [found[@"sinceStart"] description].UTF8String,
+         FLLastReadSentence(last, reading).UTF8String);
+  NSUInteger early = [found[@"starting"] count];
+  if (early > 0) {
+    printf("The device read %lu of them while starting.\n", (unsigned long)early);
+  }
+}
+
+static void FLSayOnly(FLDependencyIndex *index, NSDictionary *item) {
+  NSArray<NSDictionary *> *only = item == nil ? @[] : [index itemsOnlyNeededBy:item];
+  uint64_t total = 0;
+  for (NSDictionary *each in only) {
+    total += [each[@"bytes"] unsignedLongLongValue];
+  }
+  if (only.count == 0) {
+    return;
+  }
+  printf("With it gone, nothing else that was found would need %s, %s in all:\n",
+         FLReportCount(only.count, @"more thing", @"more things").UTF8String,
+         FLFormatBytes(total).UTF8String);
+  for (NSDictionary *each in only) {
+    printf("  %s\t%s\n", FLFormatBytes([each[@"bytes"] unsignedLongLongValue]).UTF8String,
+           [each[@"path"] UTF8String]);
+  }
+}
+
 static int FLHold(NSString *path, NSString *note, BOOL force, BOOL check,
                   dispatch_block_t save) {
   NSDictionary *service = FLServiceDefinedAt(path);
   NSString *label = service[@"label"];
   save();
-  NSString *reason = FLRefusal(path, service, force);
+  NSDictionary *inventory = FLReadState(FLInventoryState);
+  NSDictionary *dependencies = FLReadState(FLDependenciesState);
+  FLDependencyIndex *index = nil;
+  if (inventory.count > 0 && dependencies.count > 0) {
+    index = [[FLDependencyIndex alloc] initWithDependencies:dependencies inventory:inventory];
+    index.loaded = FLReadState(FLLoadedState);
+  }
+  NSDictionary *found = service == nil ? FLReadingUnder(path, inventory) : nil;
+  NSString *reason = FLRefusal(path, service, force, inventory, index, found);
   if (reason != nil) {
     return FLFail(reason);
   }
   NSArray<NSString *> *starters = label == nil ? FLStartersOf(path) : @[];
   if (check) {
-    NSUInteger found = 0;
+    NSUInteger entries = 0;
     uint64_t length = 0;
-    FLMeasure(path, &found, &length);
+    FLMeasure(path, &entries, &length);
     printf("Nothing stands in the way of setting %s aside: %s, %s.\n", path.UTF8String,
-           FLReportCount(found, @"file", @"files and folders").UTF8String,
+           FLReportCount(entries, @"file", @"files and folders").UTF8String,
            FLFormatBytes(length).UTF8String);
     if (label != nil) {
       printf("It defines the launch service %s, which %s.\n", label.UTF8String,
@@ -588,6 +659,8 @@ static int FLHold(NSString *path, NSString *note, BOOL force, BOOL check,
     for (NSString *starter in starters) {
       printf("launchd has %s, which starts a program in it.\n", starter.UTF8String);
     }
+    FLSayReading(found, inventory);
+    FLSayOnly(index, FLItemAt(inventory, path));
     return 0;
   }
   NSMutableDictionary *journal = FLReadJournal();
@@ -626,7 +699,7 @@ static int FLHold(NSString *path, NSString *note, BOOL force, BOOL check,
     record[@"label"] = label;
     record[@"loaded"] = @(loaded);
   }
-  NSDictionary *item = FLItemAt(FLReadState(FLInventoryState), path);
+  NSDictionary *item = FLItemAt(inventory, path);
   if (item[@"bytes"] != nil) {
     record[@"bytes"] = item[@"bytes"];
   }
@@ -670,6 +743,7 @@ static int FLHold(NSString *path, NSString *note, BOOL force, BOOL check,
     printf("launchd still has %s, which starts a program in it. Set that aside as well.\n",
            starter.UTF8String);
   }
+  FLSayOnly(index, item);
   return 0;
 }
 

@@ -22,6 +22,7 @@
 - (NSArray<NSArray<NSString *> *> *)entitlementsOfItem:(NSDictionary *)item;
 - (NSArray<NSDictionary *> *)itemsNamed:(NSString *)name;
 - (NSSet<NSString *> *)pathsLinkedFrom:(NSArray<NSString *> *)programs;
+- (NSArray<NSDictionary *> *)itemsOnlyNeededBy:(NSDictionary *)item;
 
 @end
 

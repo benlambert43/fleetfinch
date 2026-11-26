@@ -113,6 +113,18 @@ static NSUInteger FLInventoryUsers(NSDictionary *item) {
                                                    (unsigned long)openers];
 }
 
+- (NSString *)readingOf:(NSDictionary *)item {
+  NSDate *counting = [FLInventoryController inventory][@"reading"][@"began"];
+  if (![counting isKindOfClass:[NSDate class]] || [item[@"data"] boolValue]) {
+    return nil;
+  }
+  NSUInteger read = [item[@"read"] unsignedIntegerValue];
+  if (item[@"files"] == nil) {
+    return item[@"lastRead"] == nil ? nil : (read > 0 ? @"read" : @"not read");
+  }
+  return read == 0 ? @"no file read" : [FLCount(read, @"file") stringByAppendingString:@" read"];
+}
+
 - (NSString *)detailOf:(NSDictionary *)item {
   NSString *kind = item[@"kind"];
   NSMutableArray<NSString *> *parts = [NSMutableArray new];
@@ -160,6 +172,7 @@ static NSUInteger FLInventoryUsers(NSDictionary *item) {
   }
   [parts addObject:size ?: @""];
   [parts addObject:[self neededOf:item] ?: @""];
+  [parts addObject:[self readingOf:item] ?: @""];
   if (origin != nil && ![kind isEqualToString:@"service"]) {
     [parts addObject:origin];
   }
@@ -252,10 +265,12 @@ static NSUInteger FLInventoryUsers(NSDictionary *item) {
   for (NSDictionary *item in chosen) {
     FLRow *row = nil;
     if (files) {
+      NSString *read = [self readingOf:item];
       NSString *detail =
-        [NSString stringWithFormat:@"%@ · %@",
+        [NSString stringWithFormat:@"%@ · %@%@%@",
                                    FLCount([item[@"files"] unsignedIntegerValue], @"file"),
-                                   FLFormatBytes([item[@"bytes"] unsignedLongLongValue])];
+                                   FLFormatBytes([item[@"bytes"] unsignedLongLongValue]),
+                                   read == nil ? @"" : @" · ", read ?: @""];
       row = [FLRow rowWithTitle:item[@"path"] detail:detail];
     } else {
       row = [FLRow linkWithTitle:[FLInventoryItemController titleOf:item]

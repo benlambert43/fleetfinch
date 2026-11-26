@@ -632,7 +632,10 @@ NSDictionary *FLBundleInfo(NSString *bundlePath) {
   if (known != nil && (known[@"modified"] == modified || [known[@"modified"] isEqual:modified])) {
     return known;
   }
-  NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:file];
+  __block NSDictionary *plist = nil;
+  FLKeepingAccessTime(file, ^{
+    plist = [NSDictionary dictionaryWithContentsOfFile:file];
+  });
   NSMutableDictionary *info = [NSMutableDictionary new];
   if (modified != nil) {
     info[@"modified"] = modified;
@@ -640,7 +643,10 @@ NSDictionary *FLBundleInfo(NSString *bundlePath) {
   NSString *folder = bundlePath.lastPathComponent.stringByDeletingPathExtension;
   NSString *strings = [bundlePath
     stringByAppendingPathComponent:@"en.lproj/InfoPlist.strings"];
-  NSDictionary *localized = [NSDictionary dictionaryWithContentsOfFile:strings];
+  __block NSDictionary *localized = nil;
+  FLKeepingAccessTime(strings, ^{
+    localized = [NSDictionary dictionaryWithContentsOfFile:strings];
+  });
   info[@"name"] = localized[@"CFBundleDisplayName"] ?: localized[@"CFBundleName"]
     ?: plist[@"CFBundleDisplayName"] ?: plist[@"CFBundleName"] ?: folder;
   if (plist[@"CFBundleIdentifier"] != nil) {

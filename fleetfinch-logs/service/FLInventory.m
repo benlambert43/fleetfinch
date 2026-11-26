@@ -20,6 +20,9 @@
 
 static const uint64_t FLBlockBytes = 512;
 static const size_t FLHeadBytes = 512;
+static const long long FLStartupWithin = 15 * 60;
+static const uint64_t FLLargeFile = 128 * 1024;
+static const NSUInteger FLLargestKept = 300;
 static const size_t FLAreaDepth = 3;
 static const size_t FLSystemAreaDepth = 4;
 static const char *const FLSystemLibrary = "/System/Library/";
@@ -114,7 +117,42 @@ static BOOL FLEndsWith(const char *name, const char *ending) {
   return length >= tail && strcmp(name + length - tail, ending) == 0;
 }
 
-static FLBinaryKind FLProbeBinary(const char *path, NSString **interpreter) {
+static FLFileTimes FLTimesOf(const struct stat *info) {
+  FLFileTimes times = {(long long)info->st_atimespec.tv_sec, (long long)info->st_mtimespec.tv_sec,
+                       (unsigned long long)info->st_ino, S_ISREG(info->st_mode)};
+  return times;
+}
+
+static BOOL FLDescribesBundle(const char *name) {
+  static const char *const names[] = {"Info.plist", "PkgInfo", "CodeResources",
+                                      "ResourceRules.plist", "embedded.mobileprovision"};
+  for (size_t index = 0; index < sizeof(names) / sizeof(names[0]); index++) {
+    if (strcmp(name, names[index]) == 0) {
+      return YES;
+    }
+  }
+  return strncmp(name, "InfoPlist", 9) == 0 && FLEndsWith(name, ".strings");
+}
+
+static NSString *FLLanguageNamed(const char *folder) {
+  NSString *name = [[NSString stringWithUTF8String:folder] stringByDeletingPathExtension] ?: @"";
+  NSDictionary<NSString *, NSString *> *spelled = @{
+    @"English" : @"en",
+    @"French" : @"fr",
+    @"German" : @"de",
+    @"Japanese" : @"ja",
+    @"Spanish" : @"es",
+    @"Italian" : @"it",
+    @"Dutch" : @"nl",
+  };
+  return spelled[name] ?: name;
+}
+
+static NSDate *FLDateAt(long long seconds) {
+  return [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)seconds];
+}
+
+static FLBinaryKind FLProbeBinary(const char *path, FLFileTimes before, NSString **interpreter) {
   int handle = open(path, O_RDONLY);
   if (handle < 0) {
     return FLBinaryNone;
@@ -152,6 +190,7 @@ static FLBinaryKind FLProbeBinary(const char *path, NSString **interpreter) {
     }
   }
   close(handle);
+  FLPutBackAccessTime(path, before);
   return kind;
 }
 
@@ -202,7 +241,10 @@ static NSDictionary *FLBundlePlist(NSString *bundle) {
     if (access(file.fileSystemRepresentation, R_OK) != 0) {
       continue;
     }
-    NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:file];
+    __block NSDictionary *plist = nil;
+    FLKeepingAccessTime(file, ^{
+      plist = [NSDictionary dictionaryWithContentsOfFile:file];
+    });
     if ([plist isKindOfClass:[NSDictionary class]]) {
       return plist;
     }
@@ -279,11 +321,69 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   return [parts componentsJoinedByString:@", "];
 }
 
+@interface FLTally : NSObject
+
+@property(nonatomic) uint64_t bytes;
+@property(nonatomic) NSUInteger files;
+@property(nonatomic) NSUInteger read;
+@property(nonatomic) NSUInteger listed;
+@property(nonatomic) uint64_t readBytes;
+@property(nonatomic) long long last;
+
+- (void)note:(long long)read bytes:(uint64_t)bytes since:(long long)since describes:(BOOL)describes;
+- (void)add:(FLTally *)other;
+- (void)putInto:(NSMutableDictionary *)record;
+
+@end
+
+@implementation FLTally
+
+- (void)note:(long long)read
+       bytes:(uint64_t)bytes
+       since:(long long)since
+   describes:(BOOL)describes {
+  if (read <= 0) {
+    return;
+  }
+  if (describes) {
+    self.listed += read >= since ? 1 : 0;
+    return;
+  }
+  self.last = MAX(self.last, read);
+  if (read >= since) {
+    self.read += 1;
+    self.readBytes += bytes;
+  }
+}
+
+- (void)add:(FLTally *)other {
+  self.read += other.read;
+  self.listed += other.listed;
+  self.readBytes += other.readBytes;
+  self.last = MAX(self.last, other.last);
+}
+
+- (void)putInto:(NSMutableDictionary *)record {
+  if (self.read > 0) {
+    record[@"read"] = @(self.read);
+    record[@"readBytes"] = @(self.readBytes);
+  }
+  if (self.listed > 0) {
+    record[@"listed"] = @(self.listed);
+  }
+  if (self.last > 0) {
+    record[@"lastRead"] = FLDateAt(self.last);
+  }
+}
+
+@end
+
 @interface FLOpenItem : NSObject
 
 @property(nonatomic, strong) NSMutableDictionary *record;
 @property(nonatomic, copy) NSString *path;
 @property(nonatomic, strong) NSCountedSet<NSString *> *holds;
+@property(nonatomic, strong) FLTally *reading;
 @property(nonatomic) char *executable;
 @property(nonatomic) int level;
 @property(nonatomic) uint64_t own;
@@ -300,16 +400,6 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
 
 @end
 
-@interface FLTally : NSObject
-
-@property(nonatomic) uint64_t bytes;
-@property(nonatomic) NSUInteger files;
-
-@end
-
-@implementation FLTally
-@end
-
 @interface FLInventoryWalk : NSObject
 
 @property(nonatomic, strong, readonly) NSMutableArray<NSMutableDictionary *> *items;
@@ -320,16 +410,30 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
 @property(nonatomic, readonly) NSUInteger files;
 @property(nonatomic, readonly) NSUInteger folders;
 @property(nonatomic, readonly) NSUInteger unread;
+@property(nonatomic) long long since;
+@property(nonatomic) long long made;
+@property(nonatomic) long long started;
+@property(nonatomic) long long startUntil;
+@property(nonatomic, strong, readonly) FLTally *everything;
+@property(nonatomic, strong, readonly) NSMutableDictionary<NSString *, FLTally *> *languages;
+@property(nonatomic, strong, readonly) NSMutableArray<NSString *> *startup;
+@property(nonatomic, readonly) NSUInteger sinceStart;
+@property(nonatomic, readonly) NSUInteger untouched;
+@property(nonatomic, readonly) uint64_t untouchedBytes;
 
 - (void)walk:(NSString *)root system:(BOOL)system;
+- (NSArray<NSDictionary *> *)largestUnread;
 
 @end
 
 @implementation FLInventoryWalk {
   NSMutableArray<FLOpenItem *> *_open;
   NSMutableSet<NSNumber *> *_linked;
+  NSMutableArray<NSArray *> *_largest;
   char _area[PATH_MAX];
   FLTally *_tally;
+  FLTally *_language;
+  int _languageLevel;
   BOOL _system;
 }
 
@@ -341,8 +445,66 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
     _awaited = [NSMutableDictionary new];
     _open = [NSMutableArray new];
     _linked = [NSMutableSet new];
+    _largest = [NSMutableArray new];
+    _everything = [FLTally new];
+    _languages = [NSMutableDictionary new];
+    _startup = [NSMutableArray new];
   }
   return self;
+}
+
+- (void)trimLargest {
+  [_largest sortUsingComparator:^NSComparisonResult(NSArray *first, NSArray *second) {
+    NSComparisonResult order = [second[0] compare:first[0]];
+    return order != NSOrderedSame ? order : [first[1] compare:second[1]];
+  }];
+  if (_largest.count > FLLargestKept) {
+    [_largest removeObjectsInRange:NSMakeRange(FLLargestKept, _largest.count - FLLargestKept)];
+  }
+}
+
+- (NSArray<NSDictionary *> *)largestUnread {
+  [self trimLargest];
+  NSMutableArray<NSDictionary *> *rows = [NSMutableArray new];
+  for (NSArray *each in _largest) {
+    [rows addObject:@{
+      @"bytes" : each[0],
+      @"path" : each[1],
+      @"lastRead" : FLDateAt([each[2] longLongValue]),
+    }];
+  }
+  return rows;
+}
+
+- (void)noteRead:(long long)read bytes:(uint64_t)bytes of:(FTSENT *)entry {
+  _everything.files += 1;
+  _everything.bytes += bytes;
+  [_everything note:read bytes:bytes since:_since describes:NO];
+  _sinceStart += read >= _started ? 1 : 0;
+  if (read < _made) {
+    _untouched += 1;
+    _untouchedBytes += bytes;
+  }
+  if (_language != nil) {
+    _language.files += 1;
+    _language.bytes += bytes;
+    [_language note:read bytes:bytes since:_since describes:NO];
+  }
+  BOOL large = read < _since && bytes >= FLLargeFile;
+  BOOL starting = _startUntil > 0 && read >= _started && read <= _startUntil;
+  NSString *path = large || starting ? [self pathOf:entry] : nil;
+  if (path == nil) {
+    return;
+  }
+  if (starting) {
+    [_startup addObject:path];
+  }
+  if (large) {
+    [_largest addObject:@[ @(bytes), path, @(read) ]];
+    if (_largest.count > 2 * FLLargestKept) {
+      [self trimLargest];
+    }
+  }
 }
 
 - (NSString *)pathOf:(FTSENT *)entry {
@@ -359,6 +521,15 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
 
 - (void)enter:(FTSENT *)entry {
   _folders += _system ? 1 : 0;
+  if (_system && _language == nil && FLEndsWith(entry->fts_name, ".lproj")) {
+    NSString *name = FLLanguageNamed(entry->fts_name);
+    _language = _languages[name];
+    if (_language == nil) {
+      _language = [FLTally new];
+      _languages[name] = _language;
+    }
+    _languageLevel = entry->fts_level;
+  }
   NSString *kind = [self isSetAside:entry] ? nil : FLFolderKind(entry->fts_name, entry->fts_path);
   NSString *path = kind == nil ? nil : [self pathOf:entry];
   if (path == nil) {
@@ -369,6 +540,7 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   item.path = path;
   item.level = entry->fts_level;
   item.holds = [NSCountedSet new];
+  item.reading = [FLTally new];
   item.record = FLDescribeBundle(path, kind, &executable);
   if (executable != nil) {
     item.executable = strdup(executable.fileSystemRepresentation);
@@ -382,6 +554,9 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
 }
 
 - (void)leave:(FTSENT *)entry {
+  if (_language != nil && entry->fts_level == _languageLevel) {
+    _language = nil;
+  }
   if (entry->fts_number != 1 || _open.count == 0) {
     return;
   }
@@ -394,6 +569,9 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
     record[@"own"] = @(item.own);
   }
   record[@"files"] = @(item.files);
+  if (_system) {
+    [item.reading putInto:record];
+  }
   if (item.holds.count > 0) {
     record[@"holds"] = FLDescribeHeld(item.holds);
   }
@@ -408,6 +586,7 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   FLOpenItem *parent = _open.lastObject;
   parent.nested += total;
   parent.files += item.files;
+  [parent.reading add:item.reading];
   [parent.holds addObject:record[@"kind"]];
   [_items addObject:record];
 }
@@ -452,9 +631,13 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   _tally.files++;
 }
 
-- (BOOL)record:(FTSENT *)entry bytes:(uint64_t)bytes inside:(FLOpenItem *)item {
+- (BOOL)record:(FTSENT *)entry
+         bytes:(uint64_t)bytes
+          read:(long long)read
+        inside:(FLOpenItem *)item {
   NSString *interpreter = nil;
-  FLBinaryKind binary = FLProbeBinary(entry->fts_path, &interpreter);
+  FLBinaryKind binary =
+    FLProbeBinary(entry->fts_path, FLTimesOf(entry->fts_statp), &interpreter);
   NSString *path = binary == FLBinaryNone ? nil : [self pathOf:entry];
   if (path == nil) {
     return NO;
@@ -464,6 +647,12 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   record[@"path"] = path;
   record[@"name"] = path.lastPathComponent;
   record[@"bytes"] = @(bytes);
+  if (read > 0) {
+    record[@"lastRead"] = FLDateAt(read);
+    if (read >= _since) {
+      record[@"read"] = @1;
+    }
+  }
   if (binary == FLBinaryScript) {
     record[@"type"] = @"script";
     FLPut(record, @"interpreter", interpreter);
@@ -496,20 +685,32 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
   FLOpenItem *item = _open.lastObject;
   item.files++;
   BOOL regular = entry->fts_info == FTS_F;
+  long long read = regular && _system ? (long long)info->st_atimespec.tv_sec : 0;
+  BOOL describes = regular && FLDescribesBundle(entry->fts_name);
+  if (read > 0) {
+    [self noteRead:read bytes:bytes of:entry];
+  }
   if (regular && item != nil && [self isMainBinary:entry of:item]) {
     FLPut(item.record, FLBinaryKey(item.record[@"kind"]), [self pathOf:entry]);
+    if (read > 0) {
+      item.record[@"binaryRead"] = FLDateAt(read);
+    }
     item.own += bytes;
+    [item.reading note:read bytes:bytes since:_since describes:NO];
     return;
   }
   BOOL runs = (info->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0;
   if (regular && (runs || FLEndsWith(entry->fts_name, ".dylib")) && ![self isSetAside:entry] &&
-      [self record:entry bytes:bytes inside:item]) {
+      [self record:entry bytes:bytes read:read inside:item]) {
+    [item.reading note:read bytes:bytes since:_since describes:NO];
     return;
   }
   if (item != nil) {
     item.own += bytes;
+    [item.reading note:read bytes:bytes since:_since describes:describes];
   } else if (_system) {
     [self count:bytes inAreaOf:entry->fts_path];
+    [_tally note:read bytes:bytes since:_since describes:describes];
   }
 }
 
@@ -571,6 +772,7 @@ static NSArray<NSMutableDictionary *> *FLSharedCacheImages(uint64_t *bytes) {
         [images addObject:image];
       }
     }
+    [cache settle];
   }
   return images;
 }
@@ -828,9 +1030,29 @@ static void FLSortItems(NSMutableArray<NSMutableDictionary *> *items) {
   }];
 }
 
+static NSDate *FLCountingSince(void) {
+  NSDate *began = FLReadState(FLTouchedState)[@"began"];
+  return [began isKindOfClass:[NSDate class]] ? began : nil;
+}
+
+static NSString *FLStartIdentifier(NSDate *boot) {
+  NSString *session = FLSysctlString(@"kern.bootsessionuuid");
+  return session.length > 0 ? session : (boot == nil ? @"unknown" : FLTimestamp(boot));
+}
+
 NSDictionary *FLGatherInventory(void) {
   NSDate *began = [NSDate date];
+  double awake = FLAwakeSeconds();
+  NSDate *boot = FLBootTime();
+  NSDate *counting = FLCountingSince() ?: began;
+  long long now = (long long)began.timeIntervalSince1970;
+  long long started = boot == nil ? now : (long long)boot.timeIntervalSince1970;
+  struct stat root;
   FLInventoryWalk *walk = [FLInventoryWalk new];
+  walk.since = (long long)counting.timeIntervalSince1970;
+  walk.made = stat("/", &root) == 0 ? (long long)root.st_birthtimespec.tv_sec : 0;
+  walk.started = started;
+  walk.startUntil = boot != nil && now - started <= FLStartupWithin ? now : 0;
   [walk walk:@"/" system:YES];
   for (NSString *root in @[
          @"/private/var/containers/Bundle/Application",
@@ -930,20 +1152,64 @@ NSDictionary *FLGatherInventory(void) {
   NSMutableArray<NSDictionary *> *areas = [NSMutableArray new];
   for (NSString *area in walk.areas) {
     FLTally *tally = walk.areas[area];
-    [areas addObject:@{@"path" : area, @"bytes" : @(tally.bytes), @"files" : @(tally.files)}];
+    NSMutableDictionary *row = [NSMutableDictionary new];
+    row[@"path"] = area;
+    row[@"bytes"] = @(tally.bytes);
+    row[@"files"] = @(tally.files);
+    [tally putInto:row];
+    [areas addObject:row];
   }
+  NSMutableArray<NSDictionary *> *languages = [NSMutableArray new];
+  for (NSString *name in walk.languages) {
+    FLTally *tally = walk.languages[name];
+    NSMutableDictionary *row = [NSMutableDictionary new];
+    row[@"name"] = name;
+    row[@"bytes"] = @(tally.bytes);
+    row[@"files"] = @(tally.files);
+    [tally putInto:row];
+    [languages addObject:row];
+  }
+  [languages sortUsingComparator:^NSComparisonResult(NSDictionary *first, NSDictionary *second) {
+    NSComparisonResult sizes = [second[@"bytes"] compare:first[@"bytes"]];
+    return sizes != NSOrderedSame ? sizes : [first[@"name"] compare:second[@"name"]];
+  }];
   [areas sortUsingComparator:^NSComparisonResult(NSDictionary *first, NSDictionary *second) {
     NSComparisonResult sizes = [second[@"bytes"] compare:first[@"bytes"]];
     return sizes != NSOrderedSame ? sizes : [first[@"path"] compare:second[@"path"]];
   }];
 
+  NSMutableDictionary *reading = [NSMutableDictionary new];
+  reading[@"began"] = counting;
+  reading[@"swept"] = began;
+  reading[@"files"] = @(walk.everything.files);
+  reading[@"bytes"] = @(walk.everything.bytes);
+  reading[@"read"] = @(walk.everything.read);
+  reading[@"readBytes"] = @(walk.everything.readBytes);
+  reading[@"sinceStart"] = @(walk.sinceStart);
+  reading[@"untouched"] = @(walk.untouched);
+  reading[@"untouchedBytes"] = @(walk.untouchedBytes);
+  reading[@"languages"] = languages;
+  reading[@"largest"] = [walk largestUnread];
+  if (walk.made > 0) {
+    reading[@"made"] = FLDateAt(walk.made);
+  }
+  if (boot != nil) {
+    reading[@"boot"] = boot;
+    reading[@"start"] = FLStartIdentifier(boot);
+  }
+  if (walk.startUntil > 0) {
+    reading[@"starting"] = @(walk.startup.count);
+    reading[@"startingFiles"] = [walk.startup copy];
+  }
+
   NSMutableDictionary *inventory = [NSMutableDictionary new];
   inventory[@"version"] = @1;
   inventory[@"gathered"] = [NSDate date];
-  inventory[@"took"] = @(-began.timeIntervalSinceNow);
+  inventory[@"took"] = @(FLAwakeSeconds() - awake);
   inventory[@"items"] = items;
   inventory[@"kinds"] = kinds;
   inventory[@"areas"] = areas;
+  inventory[@"reading"] = reading;
   inventory[@"counted"] = @{
     @"files" : @(walk.files),
     @"folders" : @(walk.folders),
@@ -971,6 +1237,8 @@ static NSDictionary *FLInstalledList(NSDictionary *inventory) {
   NSMutableArray *bundles = [NSMutableArray new];
   NSMutableArray *tools = [NSMutableArray new];
   NSMutableDictionary *origins = [NSMutableDictionary new];
+  NSMutableDictionary<NSString *, NSDate *> *reads = [NSMutableDictionary new];
+  NSDate *counting = inventory[@"reading"][@"began"];
   for (NSDictionary *item in inventory[@"items"]) {
     NSString *kind = item[@"kind"];
     NSString *path = item[@"path"] ?: @"";
@@ -978,6 +1246,14 @@ static NSDictionary *FLInstalledList(NSDictionary *inventory) {
     if (origin.length > 0 && ![origin isEqualToString:FLStockOrigin] &&
         ![origin isEqualToString:FLAddedOrigin]) {
       origins[path] = origin;
+    }
+    BOOL program = [kind isEqualToString:@"program"];
+    NSString *run = program ? path : item[@"program"];
+    NSDate *read = program ? item[@"lastRead"] : item[@"binaryRead"];
+    if (run != nil && [read isKindOfClass:[NSDate class]] &&
+        [counting isKindOfClass:[NSDate class]] &&
+        [read compare:counting] != NSOrderedAscending) {
+      reads[run] = read;
     }
     NSMutableDictionary *row = [NSMutableDictionary new];
     row[@"path"] = path;
@@ -989,6 +1265,7 @@ static NSDictionary *FLInstalledList(NSDictionary *inventory) {
         continue;
       }
       FLPut(row, @"identifier", item[@"id"]);
+      FLPut(row, @"program", item[@"program"]);
       row[@"name"] = item[@"name"] ?: path.lastPathComponent;
       row[@"kind"] = item[@"type"] ?: @"system";
       row[@"hidden"] = @([item[@"hidden"] boolValue]);
@@ -1018,14 +1295,52 @@ static NSDictionary *FLInstalledList(NSDictionary *inventory) {
     @"bundles" : bundles,
     @"tools" : tools,
     @"origins" : origins,
+    @"reads" : reads,
+    @"counting" : counting ?: [NSDate date],
   };
 }
 
+static void FLRecordStartup(NSDictionary *reading) {
+  NSArray<NSString *> *paths = reading[@"startingFiles"];
+  NSString *start = reading[@"start"];
+  NSDictionary *saved = FLReadState(FLStartupState);
+  if (![paths isKindOfClass:[NSArray class]] || start == nil || [saved[@"start"] isEqual:start]) {
+    return;
+  }
+  NSMutableDictionary<NSString *, NSNumber *> *files =
+    [saved[@"files"] isKindOfClass:[NSDictionary class]] ? [saved[@"files"] mutableCopy]
+                                                         : [NSMutableDictionary new];
+  for (NSString *path in paths) {
+    files[path] = @(files[path].unsignedIntegerValue + 1);
+  }
+  FLWriteCompactState(FLStartupState, @{
+    @"version" : @1,
+    @"began" : saved[@"began"] ?: [NSDate date],
+    @"start" : start,
+    @"starts" : @([saved[@"starts"] unsignedIntegerValue] + 1),
+    @"at" : reading[@"boot"] ?: [NSDate date],
+    @"swept" : reading[@"swept"] ?: [NSDate date],
+    @"latest" : @(paths.count),
+    @"files" : files,
+  });
+}
+
 BOOL FLSaveInventory(NSDictionary *inventory) {
-  if (!FLWriteCompactState(FLInventoryState, inventory) ||
+  NSDictionary *reading = inventory[@"reading"];
+  NSMutableDictionary *kept = [inventory mutableCopy];
+  if (reading[@"startingFiles"] != nil) {
+    NSMutableDictionary *brief = [reading mutableCopy];
+    [brief removeObjectForKey:@"startingFiles"];
+    kept[@"reading"] = brief;
+  }
+  if (!FLWriteCompactState(FLInventoryState, kept) ||
       !FLWriteCompactState(FLInstalledState, FLInstalledList(inventory))) {
     return NO;
   }
+  if (FLCountingSince() == nil && [reading[@"began"] isKindOfClass:[NSDate class]]) {
+    FLWriteCompactState(FLTouchedState, @{@"version" : @1, @"began" : reading[@"began"]});
+  }
+  FLRecordStartup(reading);
   notify_post(FLNoticeInventory.UTF8String);
   return YES;
 }
@@ -1109,6 +1424,29 @@ static NSString *FLItemSize(NSDictionary *item) {
   return item[@"bytes"] == nil ? @"" : FLFormatBytes([item[@"bytes"] unsignedLongLongValue]);
 }
 
+NSString *FLReadingOf(NSDictionary *item) {
+  NSDate *last = item[@"lastRead"];
+  NSUInteger read = [item[@"read"] unsignedIntegerValue];
+  NSUInteger listed = [item[@"listed"] unsignedIntegerValue];
+  NSString *when = [last isKindOfClass:[NSDate class]]
+    ? [@", last " stringByAppendingString:FLFormatDay(last)]
+    : @"";
+  if ([@[ @"program", @"library" ] containsObject:item[@"kind"] ?: @""]) {
+    if ([item[@"inCache"] boolValue] || last == nil) {
+      return @"";
+    }
+    return [NSString stringWithFormat:@"%@%@", read > 0 ? @"read" : @"not read", when];
+  }
+  if (item[@"files"] == nil) {
+    return @"";
+  }
+  NSString *described = listed == 0
+    ? @""
+    : [NSString stringWithFormat:@", and %lu that only describe it", (unsigned long)listed];
+  return [NSString stringWithFormat:@"%lu of %@ files read%@%@", (unsigned long)read,
+                                    item[@"files"], described, when];
+}
+
 static NSString *FLItemLine(NSDictionary *item) {
   NSString *kind = item[@"kind"];
   NSString *name = item[@"name"] ?: @"";
@@ -1121,14 +1459,15 @@ static NSString *FLItemLine(NSDictionary *item) {
     NSString *type = [item[@"hidden"] boolValue]
       ? [NSString stringWithFormat:@"%@, hidden", item[@"type"]]
       : item[@"type"];
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
-                                      item[@"version"] ?: @"", FLItemSize(item), origin,
-                                      type ?: @"", held, FLOffers(item), path];
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name,
+                                      identifier, item[@"version"] ?: @"", FLItemSize(item),
+                                      origin, type ?: @"", held, FLOffers(item),
+                                      FLReadingOf(item), path];
   }
   if ([kind isEqualToString:@"extension"]) {
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
                                       item[@"point"] ?: @"", inside, FLItemSize(item), origin,
-                                      path];
+                                      FLReadingOf(item), path];
   }
   if ([kind isEqualToString:@"service"]) {
     NSString *size = item[@"programBytes"] == nil
@@ -1142,48 +1481,52 @@ static NSString *FLItemLine(NSDictionary *item) {
                        FLEscape(item[@"command"] ?: item[@"program"] ?: @""), size, origin, path];
   }
   if ([kind isEqualToString:@"xpc"]) {
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
                                       item[@"type"] ?: @"", inside, FLItemSize(item),
-                                      FLCountOf(item, @"clients"), origin, path];
+                                      FLCountOf(item, @"clients"), origin, FLReadingOf(item),
+                                      path];
   }
   if ([kind isEqualToString:@"framework"]) {
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name,
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name,
                                       identifier, item[@"version"] ?: @"", FLLibraryPlace(item),
-                                      FLItemSize(item), held, FLNeeded(item), origin, path];
+                                      FLItemSize(item), held, FLNeeded(item), origin,
+                                      FLReadingOf(item), path];
   }
   if ([kind isEqualToString:@"bundle"]) {
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", name, identifier,
                                       item[@"type"] ?: @"", FLItemSize(item), held,
-                                      FLNeeded(item), origin, path];
+                                      FLNeeded(item), origin, FLReadingOf(item), path];
   }
   if ([kind isEqualToString:@"program"]) {
     NSString *type = [item[@"type"] isEqualToString:@"script"]
       ? [NSString stringWithFormat:@"script for %@", item[@"interpreter"] ?: @"an interpreter"]
       : @"program";
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", path, type, FLItemSize(item),
-                                      FLCountOf(item, @"needs"), origin,
-                                      [item[@"runBy"] componentsJoinedByString:@", "] ?: @""];
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@", path, type,
+                                      FLItemSize(item), FLCountOf(item, @"needs"), origin,
+                                      [item[@"runBy"] componentsJoinedByString:@", "] ?: @"",
+                                      FLReadingOf(item)];
   }
   if ([item[@"inCache"] boolValue]) {
-    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", path, @"in the shared cache",
+    return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t", path, @"in the shared cache",
                                       FLFormatBytes([item[@"cached"] unsignedLongLongValue]),
                                       FLNeeded(item), origin];
   }
-  return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", path, @"on disk",
-                                    FLItemSize(item), FLNeeded(item), origin];
+  return [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", path, @"on disk",
+                                    FLItemSize(item), FLNeeded(item), origin, FLReadingOf(item)];
 }
 
 static NSString *FLItemHeadings(NSString *kind) {
   NSDictionary<NSString *, NSString *> *headings = @{
-    @"app" : @"name\tidentifier\tversion\tsize\tfrom\tkind\tholds\toffers\tpath",
-    @"extension" : @"name\tidentifier\textension point\tinside\tsize\tfrom\tpath",
+    @"app" : @"name\tidentifier\tversion\tsize\tfrom\tkind\tholds\toffers\tfiles read\tpath",
+    @"extension" : @"name\tidentifier\textension point\tinside\tsize\tfrom\tfiles read\tpath",
     @"service" : @"label\tstarts\tMach services\tnamed by\tevents\tuser\tcommand\tprogram size\t"
                  @"from\tdefined in",
-    @"xpc" : @"name\tidentifier\ttype\tinside\tsize\tnamed by\tfrom\tpath",
-    @"framework" : @"name\tidentifier\tversion\tlibrary\tsize\tholds\tneeded\tfrom\tpath",
-    @"bundle" : @"name\tidentifier\ttype\tsize\tholds\tneeded\tfrom\tpath",
-    @"program" : @"path\tkind\tsize\tlibraries linked\tfrom\trun by",
-    @"library" : @"path\twhere\tsize\tneeded\tfrom",
+    @"xpc" : @"name\tidentifier\ttype\tinside\tsize\tnamed by\tfrom\tfiles read\tpath",
+    @"framework" : @"name\tidentifier\tversion\tlibrary\tsize\tholds\tneeded\tfrom\t"
+                   @"files read\tpath",
+    @"bundle" : @"name\tidentifier\ttype\tsize\tholds\tneeded\tfrom\tfiles read\tpath",
+    @"program" : @"path\tkind\tsize\tlibraries linked\tfrom\trun by\tfile read",
+    @"library" : @"path\twhere\tsize\tneeded\tfrom\tfile read",
   };
   return headings[kind] ?: @"";
 }
@@ -1260,6 +1603,14 @@ NSString *FLInventoryText(NSDictionary *inventory, NSString *kind) {
     [text appendFormat:@"%@ files or folders could not be read and are not counted.\n",
                        counted[@"unread"]];
   }
+  NSDictionary *reading = inventory[@"reading"];
+  NSDate *counting = reading[@"began"];
+  if ([counting isKindOfClass:[NSDate class]]) {
+    [text appendFormat:@"Files read is how many of a thing's files something has read since %@, "
+                       @"going by the time of last reading the file system keeps for each file. "
+                       @"finchlog touched says more.\n",
+                       FLFormatDay(counting)];
+  }
   NSArray<NSDictionary *> *kinds = inventory[@"kinds"];
   NSArray<NSDictionary *> *areas = inventory[@"areas"];
   NSArray<NSDictionary *> *items = inventory[@"items"];
@@ -1306,11 +1657,12 @@ NSString *FLInventoryText(NSDictionary *inventory, NSString *kind) {
     }
   }
   if (everything || [kind isEqualToString:FLStorageKind]) {
-    [text appendFormat:@"\nOther files, by folder: %lu\nfolder\tfiles\tsize\n",
+    [text appendFormat:@"\nOther files, by folder: %lu\nfolder\tfiles\tsize\tfiles read\n",
                        (unsigned long)areas.count];
     for (NSDictionary *area in areas) {
-      [text appendFormat:@"%@\t%@\t%@\n", FLEscape(area[@"path"]), area[@"files"],
-                         FLFormatBytes([area[@"bytes"] unsignedLongLongValue])];
+      [text appendFormat:@"%@\t%@\t%@\t%@\n", FLEscape(area[@"path"]), area[@"files"],
+                         FLFormatBytes([area[@"bytes"] unsignedLongLongValue]),
+                         FLReadingOf(area)];
     }
   }
   return text;

@@ -25,6 +25,20 @@
   return cached.count > 0 ? cached : nil;
 }
 
++ (NSDictionary *)startup {
+  static NSDictionary *cached;
+  static NSDate *written;
+  NSDate *now = FLStateWritten(FLStartupState);
+  if (now == nil) {
+    return nil;
+  }
+  if (cached == nil || ![now isEqualToDate:written]) {
+    cached = FLReadState(FLStartupState);
+    written = now;
+  }
+  return cached.count > 0 ? cached : nil;
+}
+
 + (FLDependencyIndex *)index {
   static FLDependencyIndex *cached;
   static NSDate *written;

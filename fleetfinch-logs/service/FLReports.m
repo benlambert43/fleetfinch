@@ -6,6 +6,7 @@
 #import "FLLoaded.h"
 #import "FLReport.h"
 #import "FLStatus.h"
+#import "FLTouched.h"
 #import "FLTrace.h"
 #import "FLUsage.h"
 
@@ -18,7 +19,7 @@ NSArray<NSString *> *FLLiveReportKinds(void) {
 }
 
 NSArray<NSString *> *FLTracedReportKinds(void) {
-  return @[ @"calls", @"opened", @"talks", @"candidates" ];
+  return @[ @"calls", @"opened", @"talks", @"touched", @"candidates" ];
 }
 
 NSArray<NSString *> *FLReportKinds(void) {
@@ -34,6 +35,7 @@ NSString *FLReportTitle(NSString *kind) {
     @"calls" : @"Which system calls each program makes",
     @"opened" : @"Which parts of the system had files opened",
     @"talks" : @"Which programs hold connections to which",
+    @"touched" : @"What has been read, and what never has",
     @"candidates" : @"What nothing recorded so far has used",
   };
   return titles[kind] ?: kind;
@@ -435,6 +437,9 @@ NSDictionary *FLBuildReport(NSString *kind, FLReportSource source) {
   }
   if ([kind isEqualToString:@"talks"]) {
     return FLTalksReport(source);
+  }
+  if ([kind isEqualToString:@"touched"]) {
+    return FLTouchedReport(source);
   }
   if ([kind isEqualToString:@"candidates"]) {
     return FLCandidatesReport(source);

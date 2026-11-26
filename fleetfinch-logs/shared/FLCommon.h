@@ -24,6 +24,8 @@ extern NSString *const FLDependenciesState;
 extern NSString *const FLTrafficState;
 extern NSString *const FLLoadedState;
 extern NSString *const FLTracedState;
+extern NSString *const FLTouchedState;
+extern NSString *const FLStartupState;
 extern NSString *const FLNoticeSleeping;
 
 typedef NS_ENUM(NSInteger, FLLevel) {
@@ -61,3 +63,15 @@ NSString *FLStringFromData(NSData *data);
 BOOL FLMakeDirectory(NSString *path);
 uint64_t FLFileSize(NSString *path);
 NSDate *FLFileModified(NSString *path);
+
+typedef struct {
+  long long read;
+  long long written;
+  unsigned long long node;
+  BOOL known;
+} FLFileTimes;
+
+FLFileTimes FLFileTimesAt(const char *path);
+void FLPutBackAccessTime(const char *path, FLFileTimes before);
+void FLKeepingAccessTime(NSString *path, void (^read)(void));
+double FLAwakeSeconds(void);

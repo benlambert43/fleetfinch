@@ -29,6 +29,7 @@
 
 + (NSArray<FLSharedCache *> *)caches;
 - (BOOL)offset:(uint64_t *)offset ofAddress:(uint64_t)address;
+- (void)settle;
 
 @end
 

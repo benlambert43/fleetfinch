@@ -317,6 +317,7 @@ static NSArray<NSDictionary *> *FLReportSections(NSDictionary *report) {
 + (NSArray<NSArray<NSString *> *> *)kinds {
   return @[
     @[ @"candidates", @"What Looks Unused", @"Installed things nothing recorded has used" ],
+    @[ @"touched", @"Files Read", @"What has been read, what never has, and what a start reads" ],
     @[ @"health", @"Problems", @"Reports, bad endings, faults and errors, per component" ],
     @[ @"connections", @"Servers", @"Which programs talk to which servers" ],
     @[ @"loaded", @"Loaded Libraries", @"What running programs have really loaded" ],

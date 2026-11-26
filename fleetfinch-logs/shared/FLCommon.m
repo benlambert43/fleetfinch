@@ -1,6 +1,8 @@
 #import "FLCommon.h"
 
+#import <mach/mach_time.h>
 #import <sys/stat.h>
+#import <sys/time.h>
 #import <time.h>
 
 NSString *const FLVersion = @"1.0.0";
@@ -27,6 +29,8 @@ NSString *const FLDependenciesState = @"dependencies";
 NSString *const FLTrafficState = @"traffic";
 NSString *const FLLoadedState = @"loaded";
 NSString *const FLTracedState = @"trace";
+NSString *const FLTouchedState = @"touched";
+NSString *const FLStartupState = @"startup";
 NSString *const FLNoticeSleeping = @"com.fleetfinch.logs.sleeping";
 
 NSString *FLLivePath(void) {
@@ -325,4 +329,46 @@ NSDate *FLFileModified(NSString *path) {
     return nil;
   }
   return [NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)info.st_mtime];
+}
+
+FLFileTimes FLFileTimesAt(const char *path) {
+  FLFileTimes times = {0, 0, 0, NO};
+  struct stat info;
+  if (path != NULL && stat(path, &info) == 0 && S_ISREG(info.st_mode)) {
+    times.read = (long long)info.st_atimespec.tv_sec;
+    times.written = (long long)info.st_mtimespec.tv_sec;
+    times.node = (unsigned long long)info.st_ino;
+    times.known = YES;
+  }
+  return times;
+}
+
+void FLPutBackAccessTime(const char *path, FLFileTimes before) {
+  FLFileTimes now = FLFileTimesAt(path);
+  if (!before.known || !now.known || now.node != before.node || now.written != before.written ||
+      now.read == before.read) {
+    return;
+  }
+  struct timeval times[2];
+  times[0].tv_sec = (time_t)before.read;
+  times[0].tv_usec = 0;
+  times[1].tv_sec = (time_t)before.written;
+  times[1].tv_usec = 0;
+  utimes(path, times);
+}
+
+void FLKeepingAccessTime(NSString *path, void (^read)(void)) {
+  const char *file = path.fileSystemRepresentation;
+  FLFileTimes before = FLFileTimesAt(file);
+  read();
+  FLPutBackAccessTime(file, before);
+}
+
+double FLAwakeSeconds(void) {
+  static mach_timebase_info_data_t base;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    mach_timebase_info(&base);
+  });
+  return (double)mach_absolute_time() * base.numer / base.denom / NSEC_PER_SEC;
 }

@@ -104,6 +104,63 @@ static NSString *FLSentence(NSString *text) {
                                     FLAgo(usage[@"last"])];
 }
 
+- (NSString *)readingOf:(NSDictionary *)item {
+  NSDate *counting = [FLInventoryController inventory][@"reading"][@"began"];
+  NSString *kind = item[@"kind"];
+  if (![counting isKindOfClass:[NSDate class]] || [item[@"data"] boolValue] ||
+      [kind isEqualToString:@"service"]) {
+    return nil;
+  }
+  NSString *since = FLFormatDay(counting);
+  NSUInteger read = [item[@"read"] unsignedIntegerValue];
+  if ([kind isEqualToString:@"program"] || [kind isEqualToString:@"library"]) {
+    if (item[@"lastRead"] == nil) {
+      return nil;
+    }
+    return [NSString stringWithFormat:@"%@ since %@", read > 0 ? @"Read" : @"Not read", since];
+  }
+  if (item[@"files"] == nil) {
+    return nil;
+  }
+  NSString *described = read == 0 && [item[@"listed"] unsignedIntegerValue] > 0
+    ? @", only the files that describe it"
+    : @"";
+  NSString *found = read == 0 ? @"None" : [@(read) description];
+  return [NSString stringWithFormat:@"%@ of its %@ files since %@%@", found, item[@"files"], since,
+                                    described];
+}
+
+- (NSString *)lastReadOf:(NSDictionary *)item {
+  NSDate *last = item[@"lastRead"];
+  NSDate *made = [FLInventoryController inventory][@"reading"][@"made"];
+  if (![last isKindOfClass:[NSDate class]]) {
+    return nil;
+  }
+  if ([made isKindOfClass:[NSDate class]] && [last compare:made] == NSOrderedAscending) {
+    return @"Not since iOS was installed";
+  }
+  return [NSString stringWithFormat:@"%@ (%@)", FLFormatDay(last), FLAgo(last)];
+}
+
+- (NSString *)startingOf:(NSDictionary *)item {
+  NSDictionary *startup = [FLInventoryController startup];
+  NSDictionary<NSString *, NSNumber *> *files = startup[@"files"];
+  NSUInteger starts = [startup[@"starts"] unsignedIntegerValue];
+  NSString *path = item[@"path"];
+  if (starts == 0 || path == nil || ![files isKindOfClass:[NSDictionary class]] ||
+      [item[@"kind"] isEqualToString:@"service"] || [item[@"inCache"] boolValue]) {
+    return nil;
+  }
+  NSString *prefix = [path stringByAppendingString:@"/"];
+  NSUInteger found = 0;
+  for (NSString *file in files) {
+    found += [file isEqualToString:path] || [file hasPrefix:prefix] ? 1 : 0;
+  }
+  return [NSString stringWithFormat:@"%@, over %@",
+                                    found == 0 ? @"Nothing" : FLCount(found, @"file"),
+                                    FLCount(starts, @"recorded start")];
+}
+
 - (NSArray<NSArray<NSString *> *> *)pairsFor:(NSDictionary *)item {
   NSString *kind = item[@"kind"];
   NSMutableArray<NSArray<NSString *> *> *pairs = [NSMutableArray new];
@@ -145,6 +202,9 @@ static NSString *FLSentence(NSString *text) {
   [pairs addObject:@[ @"From", item[@"from"] ?: @"" ]];
   [pairs addObject:@[ @"Inside", item[@"inside"] ?: @"" ]];
   [pairs addObject:@[ @"Seen Running", [self runsOf:item] ?: @"" ]];
+  [pairs addObject:@[ @"Files Read", [self readingOf:item] ?: @"" ]];
+  [pairs addObject:@[ @"Last Read", [self lastReadOf:item] ?: @"" ]];
+  [pairs addObject:@[ @"Read While Starting", [self startingOf:item] ?: @"" ]];
   [pairs addObject:@[ @"Run By", FLJoined(item[@"runBy"]) ]];
   [pairs addObject:@[ @"URL Schemes", FLJoined(item[@"schemes"]) ]];
   [pairs addObject:@[ @"Background Modes", FLJoined(item[@"background"]) ]];
@@ -232,7 +292,8 @@ static NSString *FLSentence(NSString *text) {
     ? @"Nothing was found that this needs, or that needs it."
     : @"It cannot load without what it links. What it opens by name, and the services it "
       @"names, are found among its own strings, so a name it puts together while running "
-      @"is not seen.";
+      @"is not seen. Needed by Nothing Else lists what no other program, plug-in or library "
+      @"that was found would need if this were gone.";
   return @[ about, depends ];
 }
 

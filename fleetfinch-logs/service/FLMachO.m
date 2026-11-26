@@ -322,9 +322,33 @@ NSDictionary *FLReadEntitlements(int handle, FLImage *image) {
   return nil;
 }
 
+static FLFileTimes FLTimesBeforeOpening(NSString *path, BOOL opening) {
+  static NSMutableDictionary<NSString *, NSData *> *times;
+  static NSCountedSet<NSString *> *users;
+  FLFileTimes before = {0, 0, 0, NO};
+  @synchronized([FLSharedCache class]) {
+    if (times == nil) {
+      times = [NSMutableDictionary new];
+      users = [NSCountedSet new];
+    }
+    if (!opening) {
+      [users removeObject:path];
+      return before;
+    }
+    if ([users countForObject:path] == 0) {
+      before = FLFileTimesAt(path.fileSystemRepresentation);
+      times[path] = [NSData dataWithBytes:&before length:sizeof(before)];
+    }
+    [users addObject:path];
+    [times[path] getBytes:&before length:sizeof(before)];
+  }
+  return before;
+}
+
 @implementation FLSharedCache {
   struct FLCacheMapping *_mappings;
   uint32_t _mapped;
+  FLFileTimes _before;
 }
 
 + (NSArray<FLSharedCache *> *)caches {
@@ -349,12 +373,18 @@ NSDictionary *FLReadEntitlements(int handle, FLImage *image) {
   if (self) {
     _path = [path copy];
     _bytes = FLFileSize(path);
+    _before = FLTimesBeforeOpening(_path, YES);
     _handle = open(path.fileSystemRepresentation, O_RDONLY);
     if (_handle < 0 || ![self readTables]) {
       return nil;
     }
+    [self settle];
   }
   return self;
+}
+
+- (void)settle {
+  FLPutBackAccessTime(_path.fileSystemRepresentation, _before);
 }
 
 - (void)dealloc {
@@ -362,6 +392,8 @@ NSDictionary *FLReadEntitlements(int handle, FLImage *image) {
   if (_handle >= 0) {
     close(_handle);
   }
+  [self settle];
+  FLTimesBeforeOpening(_path, NO);
 }
 
 - (BOOL)readTables {

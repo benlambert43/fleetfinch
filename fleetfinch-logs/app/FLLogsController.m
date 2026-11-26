@@ -32,6 +32,7 @@ static NSString *FLSnapshotTitle(NSString *kind) {
     @"calls" : @"System Calls",
     @"opened" : @"Files Reached",
     @"talks" : @"Connections Between Programs",
+    @"touched" : @"Files Read",
     @"candidates" : @"What Looks Unused",
   };
   return titles[kind] ?: kind.capitalizedString;

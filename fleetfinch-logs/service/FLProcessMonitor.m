@@ -1,8 +1,10 @@
 #import "FLMonitors.h"
 
+#import <notify.h>
 #import <sys/stat.h>
 
 #import "FLCollect.h"
+#import "FLLaunchd.h"
 #import "FLProcessWatcher.h"
 #import "FLStatus.h"
 #import "FLStore.h"
@@ -22,6 +24,9 @@ static const NSTimeInterval FLJobsFresh = 1.0;
 static const NSTimeInterval FLEndedKept = 120;
 static const NSTimeInterval FLSettleSoonest = 0.05;
 static NSString *const FLLaunchProxy = @"xpcproxy";
+static const char *const FLLockState = "com.apple.springboard.lockstate";
+static const NSTimeInterval FLLaunchdSettle = 1.0;
+static const NSTimeInterval FLLaunchdReview = 20;
 
 static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *source,
                      NSString *format, ...) NS_FORMAT_FUNCTION(5, 6);
@@ -138,12 +143,14 @@ static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *so
   NSArray<NSDictionary *> *_live;
   NSDictionary<NSString *, NSDictionary *> *_apps;
   NSString *_front;
+  NSString *_counted;
   NSDate *_sampled;
   BOOL _primed;
   NSMutableDictionary<NSString *, FLPendingProcess *> *_pending;
   NSMutableDictionary<NSNumber *, NSDictionary *> *_ended;
   FLProcessWatcher *_watcher;
   dispatch_queue_t _queue;
+  NSMutableSet<NSString *> *_asking;
   BOOL _settling;
   BOOL _jobsStale;
 }
@@ -158,8 +165,46 @@ static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *so
     _live = @[];
     _pending = [NSMutableDictionary new];
     _ended = [NSMutableDictionary new];
+    _asking = [NSMutableSet new];
   }
   return self;
+}
+
+- (void)askLaunchdAbout:(NSString *)label {
+  NSDictionary<NSString *, NSString *> *facts = FLLaunchdFacts(label);
+  if (facts == nil) {
+    return;
+  }
+  [self.ledger service:label
+              launched:(NSUInteger)MAX(0, facts[@"runs"].integerValue)
+                reason:facts[@"pid"] == nil ? nil : facts[@"immediate reason"]
+               program:facts[@"program"]];
+}
+
+- (void)reviewLaunchd {
+  for (NSString *label in _jobs.allKeys) {
+    @autoreleasepool {
+      [self askLaunchdAbout:label];
+    }
+  }
+}
+
+- (void)askSoonAbout:(NSString *)label {
+  if (_queue == nil || label == nil || [_asking containsObject:label] ||
+      [FLServiceFamily(label) containsString:@"*"]) {
+    return;
+  }
+  [_asking addObject:label];
+  __weak FLProcessMonitor *weak = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(FLLaunchdSettle * NSEC_PER_SEC)),
+                 _queue, ^{
+                   [weak asked:label];
+                 });
+}
+
+- (void)asked:(NSString *)label {
+  [_asking removeObject:label];
+  [self askLaunchdAbout:label];
 }
 
 - (NSArray<NSDictionary *> *)definitions {
@@ -245,6 +290,7 @@ static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *so
   FLNoteAt(when, @"process", FLLevelNotice, [self sourceOf:process],
            @"started pid %d by %@ (pid %d)%@%@ as %@: %@", process.pid, [self starterOf:process],
            process.parent, service, way, FLUserName(process.user), [process commandLine]);
+  [self askSoonAbout:label];
   if (process.parent == 1 && label == nil) {
     FLNoteAt(when, @"service", FLLevelNotice,
              [self bundledServiceLabel:process] ?: [self sourceOf:process],
@@ -429,8 +475,41 @@ static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *so
   return CFBridgingRelease(copyFront());
 }
 
+- (BOOL)isLocked {
+  static int token = NOTIFY_TOKEN_INVALID;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    if (notify_register_check(FLLockState, &token) != NOTIFY_STATUS_OK) {
+      token = NOTIFY_TOKEN_INVALID;
+    }
+  });
+  uint64_t state = 0;
+  return token != NOTIFY_TOKEN_INVALID && notify_get_state(token, &state) == NOTIFY_STATUS_OK &&
+         state != 0;
+}
+
+- (void)countFront:(NSString *)front {
+  NSString *shown = [self isLocked] ? @"" : front;
+  NSString *name = nil;
+  NSString *path = nil;
+  if (shown.length > 0 && ![shown isEqualToString:_counted ?: @""]) {
+    for (FLProcess *process in _known.allValues) {
+      NSString *bundle = [process appBundlePath];
+      NSDictionary *info = bundle == nil ? nil : FLBundleInfo(bundle);
+      if ([info[@"identifier"] isEqualToString:shown]) {
+        name = info[@"name"];
+        path = bundle;
+        break;
+      }
+    }
+  }
+  _counted = shown;
+  [self.ledger inFront:shown name:name path:path];
+}
+
 - (void)checkFront {
   NSString *front = [self lookUpFrontApp] ?: @"";
+  [self countFront:front];
   if (_front != nil && [front isEqualToString:_front]) {
     return;
   }
@@ -775,6 +854,10 @@ static void FLNoteAt(NSDate *date, NSString *stream, FLLevel level, NSString *so
   }
   _queue = queue;
   __weak FLProcessMonitor *weak = self;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(FLLaunchdReview * NSEC_PER_SEC)),
+                 queue, ^{
+                   [weak reviewLaunchd];
+                 });
   FLProcessWatcher *watcher =
     [[FLProcessWatcher alloc] initWithQueue:queue
                                     handler:^(NSArray<FLProcessEvent *> *events) {

@@ -1,15 +1,17 @@
 #import "FLDependencyIndex.h"
 
+#import "FLCommon.h"
 #import "FLLoaded.h"
 
 NSArray<NSString *> *FLNeedOrder(void) {
-  return @[ @"loaded", @"seen", @"opened", @"idle", @"plugin", @"unseen", @"orphan" ];
+  return @[ @"loaded", @"seen", @"read", @"opened", @"idle", @"plugin", @"unseen", @"orphan" ];
 }
 
 NSString *FLNeedText(NSString *need) {
   NSDictionary<NSString *, NSString *> *texts = @{
     @"loaded" : @"loaded by a program that has run",
     @"seen" : @"seen loaded in a running program",
+    @"read" : @"its file has been read, as loading it does",
     @"opened" : @"may be opened by a program that has run",
     @"idle" : @"needed only by programs that have never run",
     @"plugin" : @"needed only by plug-ins that nothing names",
@@ -263,6 +265,17 @@ static void FLGather(NSMutableDictionary<NSString *, NSMutableArray *> *table, N
       title:@"Named By"
        rows:[self rowsForNodes:[self clientsOfItem:item]]
          to:sections];
+  NSMutableArray<NSDictionary *> *spare = [NSMutableArray new];
+  for (NSDictionary *each in [self itemsOnlyNeededBy:item]) {
+    NSString *where = each[@"path"] ?: @"";
+    uint64_t bytes = [each[@"bytes"] unsignedLongLongValue];
+    [spare addObject:@{
+      @"title" : each[@"name"] ?: where.lastPathComponent,
+      @"detail" : [NSString stringWithFormat:@"%@ · %@", FLFormatBytes(bytes), where],
+      @"item" : where,
+    }];
+  }
+  [self add:@"only" title:@"Needed by Nothing Else" rows:spare to:sections];
   NSString *own = node[@"path"];
   if (own != nil && [node[@"type"] isEqualToString:@"program"]) {
     [self add:@"loads"
@@ -277,6 +290,127 @@ static void FLGather(NSMutableDictionary<NSString *, NSMutableArray *> *table, N
   }
   [self addTracedFor:item[@"path"] program:own to:sections];
   return sections;
+}
+
+- (NSSet<NSString *> *)nodesOf:(NSDictionary *)item {
+  NSMutableSet<NSString *> *own = [NSMutableSet new];
+  NSString *path = item[@"path"];
+  if (path == nil) {
+    return own;
+  }
+  if ([item[@"kind"] isEqualToString:@"service"]) {
+    NSString *program = item[@"program"];
+    for (NSDictionary *other in FLListed(_inventory[@"items"])) {
+      if (other != item && [other[@"kind"] isEqualToString:@"service"] &&
+          [other[@"program"] isEqual:program] && ![other[@"path"] isEqual:path]) {
+        return own;
+      }
+    }
+    if (program != nil && _nodes[program] != nil) {
+      [own addObject:program];
+    }
+    return own;
+  }
+  NSString *prefix = [path stringByAppendingString:@"/"];
+  for (NSString *each in _nodes) {
+    NSString *holder = _nodes[each][@"item"];
+    if ([each isEqualToString:path] || [each hasPrefix:prefix] || [holder isEqual:path] ||
+        [holder hasPrefix:prefix]) {
+      [own addObject:each];
+    }
+  }
+  return own;
+}
+
+- (NSSet<NSString *> *)reachedFrom:(NSArray<NSString *> *)starts
+                           without:(NSSet<NSString *> *)left {
+  NSMutableSet<NSString *> *reached = [NSMutableSet new];
+  NSMutableArray<NSString *> *waiting = [starts mutableCopy];
+  while (waiting.count > 0) {
+    NSString *path = waiting.lastObject;
+    [waiting removeLastObject];
+    NSDictionary *node = _nodes[path];
+    for (NSString *key in @[ @"links", @"opens" ]) {
+      for (NSString *target in FLListed(node[key])) {
+        if (![reached containsObject:target] && ![left containsObject:target]) {
+          [reached addObject:target];
+          [waiting addObject:target];
+        }
+      }
+    }
+  }
+  return reached;
+}
+
+- (NSArray<NSDictionary *> *)itemsOnlyNeededBy:(NSDictionary *)item {
+  NSSet<NSString *> *own = [self nodesOf:item];
+  if (own.count == 0) {
+    return @[];
+  }
+  NSMutableArray<NSString *> *others = [NSMutableArray new];
+  for (NSString *path in _nodes) {
+    if (![own containsObject:path] && ![_nodes[path][@"type"] isEqualToString:@"library"]) {
+      [others addObject:path];
+    }
+  }
+  NSMutableSet<NSString *> *kept = [[self reachedFrom:others without:[NSSet set]] mutableCopy];
+  [kept addObjectsFromArray:others];
+  NSMutableSet<NSString *> *spare = [NSMutableSet new];
+  for (NSString *path in [self reachedFrom:own.allObjects without:kept]) {
+    BOOL loaded = NO;
+    for (NSString *program in FLLoadedBy(self.loaded, path)) {
+      loaded = loaded || ![own containsObject:program];
+    }
+    if (![own containsObject:path] && !loaded) {
+      [spare addObject:path];
+    }
+  }
+  NSString *within = [item[@"kind"] isEqualToString:@"service"]
+    ? nil
+    : [item[@"path"] stringByAppendingString:@"/"];
+  NSMutableDictionary<NSString *, NSDictionary *> *found = [NSMutableDictionary new];
+  for (NSString *path in spare) {
+    NSDictionary *holder = [self itemOfNode:_nodes[path]];
+    NSString *where = holder[@"path"];
+    if (where == nil || [holder[@"bytes"] unsignedLongLongValue] == 0 ||
+        (within != nil && [where hasPrefix:within]) || found[where] != nil) {
+      continue;
+    }
+    NSString *prefix = [where stringByAppendingString:@"/"];
+    BOOL whole = YES;
+    for (NSString *each in _nodes) {
+      if (([each isEqualToString:where] || [each hasPrefix:prefix]) &&
+          ![spare containsObject:each] && ![own containsObject:each]) {
+        whole = NO;
+        break;
+      }
+    }
+    if (whole) {
+      found[where] = holder;
+    }
+  }
+  if (own.count > 0 && [item[@"kind"] isEqualToString:@"service"]) {
+    NSDictionary *program = [self itemOfNode:_nodes[own.anyObject]];
+    if (program[@"path"] != nil && [program[@"bytes"] unsignedLongLongValue] > 0 &&
+        ![kept containsObject:own.anyObject]) {
+      found[program[@"path"]] = program;
+    }
+  }
+  NSMutableArray<NSDictionary *> *items = [NSMutableArray new];
+  for (NSString *where in found) {
+    BOOL nested = NO;
+    for (NSString *other in found) {
+      nested = nested || [where hasPrefix:[other stringByAppendingString:@"/"]];
+    }
+    if (!nested) {
+      [items addObject:found[where]];
+    }
+  }
+  [items sortUsingComparator:^NSComparisonResult(NSDictionary *first, NSDictionary *second) {
+    NSComparisonResult sizes = [second[@"bytes"] compare:first[@"bytes"]];
+    return sizes != NSOrderedSame ? sizes : [first[@"path"] compare:second[@"path"]];
+  }];
+  return items;
 }
 
 - (NSArray<NSDictionary *> *)rowsForUses:(NSDictionary<NSString *, NSArray<NSNumber *> *> *)uses

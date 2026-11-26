@@ -104,12 +104,15 @@ static const NSTimeInterval FLFreshFor = 20;
     FLSection *usage = [FLSection sectionWithTitle:@"What Has Run"];
     __weak FLOverviewController *weak = self;
     for (NSArray<NSString *> *kind in @[
-           @[ @"app", @"Apps", @"never opened" ], @[ @"service", @"Services", @"never run" ],
+           @[ @"app", @"Apps", @"never run" ], @[ @"service", @"Services", @"never run" ],
            @[ @"program", @"Programs", @"never run" ]
          ]) {
       NSDictionary *counts = counted[kind[0]];
       NSString *detail = [NSString stringWithFormat:@"%@ of %@ %@", counts[@"never"] ?: @0,
                                                     counts[@"total"] ?: @0, kind[2]];
+      if ([kind[0] isEqualToString:@"app"]) {
+        detail = [detail stringByAppendingFormat:@", %@ been in front", counts[@"front"] ?: @0];
+      }
       [usage addRow:[FLRow linkWithTitle:kind[1]
                                   detail:detail
                                   action:^{

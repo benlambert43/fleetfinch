@@ -2,7 +2,6 @@
 
 #import <fcntl.h>
 #import <limits.h>
-#import <mach/mach_time.h>
 #import <stdlib.h>
 #import <sys/stat.h>
 #import <unistd.h>
@@ -10,6 +9,7 @@
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLInventory.h"
+#import "FLLaunchd.h"
 #import "FLStatus.h"
 
 static const NSTimeInterval FLUsageSaveEvery = 300;
@@ -23,15 +23,6 @@ static NSString *const FLUsageUnnamed = @"(too short to name)";
 static NSString *const FLCleanEnding = @"exit code 0";
 
 static FLUsageLedger *FLLedger;
-
-static double FLAwakeSeconds(void) {
-  static mach_timebase_info_data_t base;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    mach_timebase_info(&base);
-  });
-  return (double)mach_absolute_time() * base.numer / base.denom / NSEC_PER_SEC;
-}
 
 NSString *FLServiceFamily(NSString *label) {
   static NSArray<NSArray *> *rules;
@@ -80,6 +71,7 @@ static NSString *FLScriptInterpreter(NSString *path) {
   if (lstat(path.fileSystemRepresentation, &info) != 0 || !S_ISREG(info.st_mode)) {
     return nil;
   }
+  FLFileTimes before = FLFileTimesAt(path.fileSystemRepresentation);
   int handle = open(path.fileSystemRepresentation, O_RDONLY);
   if (handle < 0) {
     return nil;
@@ -87,6 +79,7 @@ static NSString *FLScriptInterpreter(NSString *path) {
   char line[FLUsageScriptLine + 1] = {0};
   ssize_t count = read(handle, line, FLUsageScriptLine);
   close(handle);
+  FLPutBackAccessTime(path.fileSystemRepresentation, before);
   if (count < 3 || line[0] != '#' || line[1] != '!') {
     return nil;
   }
@@ -135,12 +128,16 @@ static NSMutableDictionary *FLMutableCounts(id value) {
 @implementation FLUsageLedger {
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_entries;
   NSMutableDictionary<NSString *, NSMutableDictionary *> *_active;
+  NSMutableDictionary<NSString *, NSNumber *> *_launched;
   NSDate *_began;
   NSDate *_saved;
   NSString *_boot;
+  NSString *_born;
+  NSString *_front;
   NSUInteger _boots;
   double _watched;
   double _awake;
+  double _frontSince;
   BOOL _changed;
   BOOL _drifted;
 }
@@ -159,7 +156,7 @@ static NSMutableDictionary *FLMutableCounts(id value) {
           continue;
         }
         NSMutableDictionary *copy = [entry mutableCopy];
-        for (NSString *field in @[ @"starters", @"endings", @"reports" ]) {
+        for (NSString *field in @[ @"starters", @"endings", @"reports", @"reasons" ]) {
           NSMutableDictionary *counts = FLMutableCounts(copy[field]);
           if (counts != nil) {
             copy[field] = counts;
@@ -187,8 +184,14 @@ static NSMutableDictionary *FLMutableCounts(id value) {
     _watched = [saved[@"watched"] doubleValue];
     _awake = FLAwakeSeconds();
     _boot = [boot copy] ?: @"";
+    _born = saved[@"began"] == nil ? _boot : saved[@"born"];
     _saved = [NSDate date];
     _changed = !sameBoot;
+    _front = sameBoot && [saved[@"front"] isKindOfClass:[NSString class]] ? saved[@"front"] : @"";
+    _frontSince = _awake;
+    _launched = sameBoot && [saved[@"launched"] isKindOfClass:[NSDictionary class]]
+      ? [saved[@"launched"] mutableCopy]
+      : [NSMutableDictionary new];
   }
   return self;
 }
@@ -330,6 +333,9 @@ static NSMutableDictionary *FLMutableCounts(id value) {
     return;
   }
   NSDate *since = from ?: process.started ?: now;
+  if ([since compare:_began] == NSOrderedAscending) {
+    since = _began;
+  }
   [self count:keys process:process starter:starter from:since];
   NSMutableDictionary *state = [NSMutableDictionary new];
   state[@"keys"] = keys;
@@ -379,6 +385,33 @@ static NSMutableDictionary *FLMutableCounts(id value) {
   entry[@"last"] = when;
   FLTally(entry, @"starters", starter);
   _changed = YES;
+}
+
+- (void)inFront:(NSString *)identifier name:(NSString *)name path:(NSString *)path {
+  NSString *shown = identifier ?: @"";
+  double awake = FLAwakeSeconds();
+  NSDate *now = [NSDate date];
+  NSMutableDictionary *held =
+    _front.length > 0 ? _entries[[@"app:" stringByAppendingString:_front]] : nil;
+  if (held != nil) {
+    held[@"frontSeconds"] = @([held[@"frontSeconds"] doubleValue] + MAX(0, awake - _frontSince));
+    held[@"lastFront"] = now;
+    _drifted = YES;
+  }
+  _frontSince = awake;
+  if ([shown isEqualToString:_front]) {
+    return;
+  }
+  _front = [shown copy];
+  _changed = YES;
+  if (shown.length == 0) {
+    return;
+  }
+  NSMutableDictionary *entry = [self entry:[@"app:" stringByAppendingString:shown]
+                                      name:name
+                                      path:path];
+  entry[@"fronts"] = @([entry[@"fronts"] unsignedLongLongValue] + 1);
+  entry[@"lastFront"] = now;
 }
 
 - (void)seen:(FLProcess *)process {
@@ -435,6 +468,35 @@ static NSMutableDictionary *FLMutableCounts(id value) {
     if (![ending isEqualToString:FLCleanEnding]) {
       entry[@"bad"] = @([entry[@"bad"] unsignedLongLongValue] + 1);
     }
+    _changed = YES;
+  }
+}
+
+- (void)service:(NSString *)label
+       launched:(NSUInteger)runs
+         reason:(NSString *)reason
+        program:(NSString *)program {
+  NSString *family = FLServiceFamily(label);
+  if (family.length == 0 || [family containsString:@"*"] ||
+      [family hasPrefix:@"UIKitApplication:"]) {
+    return;
+  }
+  NSString *key = [@"service:" stringByAppendingString:family];
+  NSNumber *known = _launched[label];
+  NSUInteger before = known.unsignedIntegerValue;
+  if (known == nil && [_born isEqual:_boot]) {
+    before = reason.length > 0 && runs > 0 ? runs - 1 : runs;
+  }
+  if (known == nil || runs > before) {
+    _launched[label] = @(runs);
+    _changed = YES;
+  }
+  if (runs > before) {
+    NSMutableDictionary *entry = [self entry:key name:family path:program];
+    entry[@"launches"] = @([entry[@"launches"] unsignedLongLongValue] + (runs - before));
+    FLTally(entry, @"reasons", reason);
+  } else if (reason.length > 0 && _entries[key] != nil && _entries[key][@"reasons"] == nil) {
+    FLTally(_entries[key], @"reasons", reason);
     _changed = YES;
   }
 }
@@ -524,6 +586,9 @@ static NSMutableDictionary *FLMutableCounts(id value) {
     @"saved" : [NSDate date],
     @"entries" : _entries,
     @"active" : _active,
+    @"front" : _front ?: @"",
+    @"launched" : _launched,
+    @"born" : _born ?: @"",
   };
 }
 
@@ -570,6 +635,17 @@ static NSString *FLDescribeCounts(NSDictionary<NSString *, NSNumber *> *counts) 
   return [parts componentsJoinedByString:@", "];
 }
 
+static NSString *FLDescribeReasons(NSDictionary<NSString *, NSNumber *> *counts) {
+  if (![counts isKindOfClass:[NSDictionary class]] || counts.count == 0) {
+    return @"";
+  }
+  NSMutableDictionary<NSString *, NSNumber *> *said = [NSMutableDictionary new];
+  for (NSString *reason in counts) {
+    said[FLLaunchReasonText(reason)] = counts[reason];
+  }
+  return FLDescribeCounts(said);
+}
+
 NSString *FLUsageTrouble(NSDictionary *entry) {
   NSMutableArray<NSString *> *parts = [NSMutableArray new];
   NSArray<NSArray<NSString *> *> *counted = @[
@@ -592,13 +668,16 @@ static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
   row[@"kind"] = kind;
   row[@"key"] = key;
   row[@"name"] = name.length > 0 ? name : key;
-  row[@"ran"] = @(entry != nil);
+  row[@"ran"] = @([entry[@"runs"] unsignedLongLongValue] > 0 ||
+                  [entry[@"fronts"] unsignedLongLongValue] > 0 ||
+                  [entry[@"launches"] unsignedLongLongValue] > 0);
   row[@"running"] = @(running);
   if (entry == nil) {
     return row;
   }
   for (NSString *field in @[
-         @"runs", @"first", @"last", @"seconds", @"processor", @"memory", @"command", @"user"
+         @"runs", @"first", @"last", @"seconds", @"processor", @"memory", @"command", @"user",
+         @"fronts", @"frontSeconds", @"lastFront", @"launches"
        ]) {
     if (entry[field] != nil) {
       row[field] = entry[field];
@@ -607,6 +686,7 @@ static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
   row[@"starters"] = FLDescribeCounts(entry[@"starters"]);
   row[@"endings"] = FLDescribeCounts(entry[@"endings"]);
   row[@"reports"] = FLDescribeCounts(entry[@"reports"]);
+  row[@"why"] = FLDescribeReasons(entry[@"reasons"]);
   for (NSString *field in @[ @"errors", @"faults", @"bad", @"reported" ]) {
     if ([entry[field] unsignedLongLongValue] > 0) {
       row[field] = entry[field];
@@ -633,14 +713,27 @@ static NSDictionary *FLUsageInventory(void) {
   for (NSString *key in @[ @"apps", @"bundles", @"tools" ]) {
     found[key] = [installed[key] isKindOfClass:[NSArray class]] ? installed[key] : @[];
   }
-  found[@"origins"] =
-    [installed[@"origins"] isKindOfClass:[NSDictionary class]] ? installed[@"origins"] : @{};
+  for (NSString *key in @[ @"origins", @"reads" ]) {
+    found[key] = [installed[key] isKindOfClass:[NSDictionary class]] ? installed[key] : @{};
+  }
+  if ([installed[@"counting"] isKindOfClass:[NSDate class]]) {
+    found[@"counting"] = installed[@"counting"];
+  }
   found[@"listed"] = @(installed.count > 0);
   found[@"definitions"] = FLLaunchServices() ?: @[];
   kept = found;
   built = [NSDate date];
   listed = written;
   return kept;
+}
+
+static NSDictionary *FLUsageDetails(NSDictionary *details, NSDate *read) {
+  if (read == nil) {
+    return details;
+  }
+  NSMutableDictionary *more = [details mutableCopy];
+  more[@"read"] = read;
+  return more;
 }
 
 NSDictionary *FLUsageReport(NSDictionary *usage) {
@@ -656,6 +749,7 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
   }
   NSDictionary *inventory = FLUsageInventory();
   NSDictionary<NSString *, NSString *> *owners = inventory[@"origins"];
+  NSDictionary<NSString *, NSDate *> *reads = inventory[@"reads"];
   NSMutableArray<NSDictionary *> *rows = [NSMutableArray new];
   NSMutableSet<NSString *> *listed = [NSMutableSet new];
   NSMutableDictionary<NSString *, NSNumber *> *sizes = [NSMutableDictionary new];
@@ -693,8 +787,9 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
       @"note" : note ?: @"",
       @"bytes" : app[@"bytes"] ?: @0,
     };
-    [rows addObject:FLUsageRow(@"app", identifier, app[@"name"], details, entries[key],
-                               [running countForObject:key])];
+    [rows addObject:FLUsageRow(@"app", identifier, app[@"name"],
+                               FLUsageDetails(details, reads[app[@"program"] ?: @""]),
+                               entries[key], [running countForObject:key])];
   }
 
   NSMutableSet<NSString *> *servicePrograms = [NSMutableSet new];
@@ -724,8 +819,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
       @"note" : FLServiceStarts(service) ?: @"",
       @"bytes" : sizes[program] ?: @0,
     };
-    [rows addObject:FLUsageRow(@"service", family, family, details, entries[key],
-                               [running countForObject:key])];
+    [rows addObject:FLUsageRow(@"service", family, family, FLUsageDetails(details, reads[program]),
+                               entries[key], [running countForObject:key])];
   }
   for (NSDictionary *bundle in inventory[@"bundles"]) {
     NSString *identifier = bundle[@"identifier"];
@@ -747,7 +842,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
       @"note" : bundle[@"note"] ?: @"",
       @"bytes" : bundle[@"bytes"] ?: @0,
     };
-    [rows addObject:FLUsageRow(@"service", identifier, identifier, details, entries[used],
+    [rows addObject:FLUsageRow(@"service", identifier, identifier,
+                               FLUsageDetails(details, reads[program]), entries[used],
                                [running countForObject:used])];
   }
 
@@ -763,7 +859,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     }
     NSDictionary *details =
       @{@"where" : path, @"origin" : tool[@"origin"] ?: @"", @"bytes" : tool[@"bytes"] ?: @0};
-    [rows addObject:FLUsageRow(@"program", path, path.lastPathComponent, details, entry,
+    [rows addObject:FLUsageRow(@"program", path, path.lastPathComponent,
+                               FLUsageDetails(details, reads[path]), entry,
                                [running countForObject:key])];
   }
 
@@ -798,16 +895,25 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
 
   NSMutableDictionary *summary = [NSMutableDictionary new];
   for (NSString *kind in @[ @"app", @"service", @"program" ]) {
-    NSUInteger total = 0, never = 0, now = 0;
+    NSUInteger total = 0, never = 0, now = 0, read = 0, front = 0;
     for (NSDictionary *row in rows) {
       if (![row[@"kind"] isEqualToString:kind]) {
         continue;
       }
+      BOOL ran = [row[@"ran"] boolValue];
       total++;
-      never += [row[@"ran"] boolValue] ? 0 : 1;
+      never += ran ? 0 : 1;
+      read += !ran && row[@"read"] != nil ? 1 : 0;
+      front += [row[@"fronts"] unsignedLongLongValue] > 0 ? 1 : 0;
       now += [row[@"running"] unsignedIntegerValue] > 0 ? 1 : 0;
     }
-    summary[kind] = @{@"total" : @(total), @"never" : @(never), @"running" : @(now)};
+    summary[kind] = @{
+      @"total" : @(total),
+      @"never" : @(never),
+      @"running" : @(now),
+      @"read" : @(read),
+      @"front" : @(front),
+    };
   }
   [rows sortUsingComparator:^(NSDictionary *first, NSDictionary *second) {
     return [first[@"name"] caseInsensitiveCompare:second[@"name"]];
@@ -820,11 +926,18 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
   report[@"rows"] = rows;
   report[@"summary"] = summary;
   report[@"listed"] = inventory[@"listed"] ?: @NO;
+  if (inventory[@"counting"] != nil) {
+    report[@"counting"] = inventory[@"counting"];
+  }
   return report;
 }
 
 BOOL FLWriteUsageReport(NSDictionary *report) {
   return FLWriteCompactState(FLUsageReportState, report);
+}
+
+static NSString *FLUsageDay(id date) {
+  return [date isKindOfClass:[NSDate class]] ? FLFormatDay(date) : @"";
 }
 
 static NSString *FLUsageNumbers(NSDictionary *row) {
@@ -833,8 +946,7 @@ static NSString *FLUsageNumbers(NSDictionary *row) {
     stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%.1fs\t%@\t%@", row[@"runs"] ?: @0,
                      running > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)running]
                                  : @"no",
-                     row[@"first"] == nil ? @"" : FLFormatDay(row[@"first"]),
-                     row[@"last"] == nil ? @"" : FLFormatDay(row[@"last"]),
+                     FLUsageDay(row[@"first"]), FLUsageDay(row[@"last"]),
                      FLFormatDuration([row[@"seconds"] doubleValue]),
                      [row[@"processor"] doubleValue],
                      FLFormatBytes([row[@"memory"] unsignedLongLongValue]),
@@ -851,25 +963,55 @@ static NSString *FLUsageLine(NSDictionary *row, BOOL ran) {
   NSString *origin = row[@"origin"] ?: @"";
   NSString *note = row[@"note"] ?: @"";
   NSString *where = FLEscape([row[@"where"] length] > 0 ? row[@"where"] : row[@"key"]);
+  NSString *read = FLUsageDay(row[@"read"]);
   uint64_t bytes = [row[@"bytes"] unsignedLongLongValue];
   NSString *size = bytes > 0 ? FLFormatBytes(bytes) : @"";
   if ([kind isEqualToString:@"app"]) {
-    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"name"],
-                                            row[@"key"], FLUsageNumbers(row), note, size, origin,
-                                            where]
-               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", row[@"name"], row[@"key"],
-                                            note, size, origin, where];
+    NSString *front = [NSString
+      stringWithFormat:@"%@\t%@\t%@", row[@"fronts"] ?: @0,
+                       FLFormatDuration([row[@"frontSeconds"] doubleValue]),
+                       FLUsageDay(row[@"lastFront"])];
+    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"name"],
+                                            row[@"key"], front, FLUsageNumbers(row), note, size,
+                                            origin, where]
+               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"name"],
+                                            row[@"key"], note, size, origin, read,
+                                            row[@"trouble"] ?: @"", where];
   }
   if ([kind isEqualToString:@"service"]) {
-    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"key"],
-                                            FLUsageNumbers(row), row[@"endings"] ?: @"", note,
-                                            size, origin, where, row[@"file"] ?: @""]
-               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@", row[@"key"], note, size,
-                                            origin, where, row[@"file"] ?: @""];
+    return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@",
+                                            row[@"key"], FLUsageNumbers(row),
+                                            row[@"launches"] ?: @"", row[@"why"] ?: @"",
+                                            row[@"endings"] ?: @"", note, size, origin, where,
+                                            row[@"file"] ?: @""]
+               : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@", row[@"key"],
+                                            note, size, origin, read, row[@"trouble"] ?: @"",
+                                            where, row[@"file"] ?: @""];
   }
   return ran ? [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", where, FLUsageNumbers(row),
                                           size, origin, FLEscape(row[@"command"] ?: @"")]
-             : [NSString stringWithFormat:@"%@\t%@\t%@", where, size, origin];
+             : [NSString stringWithFormat:@"%@\t%@\t%@\t%@\t%@", where, size, origin, read,
+                                          row[@"trouble"] ?: @""];
+}
+
+static NSComparator FLLatest(NSString *field) {
+  return ^NSComparisonResult(NSDictionary *first, NSDictionary *second) {
+    NSDate *earlier = [first[field] isKindOfClass:[NSDate class]] ? first[field]
+                                                                 : [NSDate distantPast];
+    NSDate *later = [second[field] isKindOfClass:[NSDate class]] ? second[field]
+                                                                : [NSDate distantPast];
+    return [later compare:earlier];
+  };
+}
+
+static void FLAppendRows(NSMutableString *text, NSString *title, NSString *headings,
+                         NSArray<NSDictionary *> *rows, BOOL ran) {
+  [text appendFormat:@"\n%@: %lu\n%@\n", title, (unsigned long)rows.count,
+                     [headings stringByReplacingOccurrencesOfString:@"{numbers}"
+                                                         withString:FLUsageHeadings]];
+  for (NSDictionary *row in rows) {
+    [text appendFormat:@"%@\n", FLUsageLine(row, ran)];
+  }
 }
 
 NSString *FLUsageText(NSDictionary *report, BOOL neverOnly) {
@@ -884,65 +1026,87 @@ NSString *FLUsageText(NSDictionary *report, BOOL neverOnly) {
   [text appendString:@"Runs are counted as the kernel reports them. One that lasts only a few "
                      @"milliseconds while the processor is busy can end before it is named, "
                      @"and is counted as too short to name.\n"];
+  [text appendString:@"An app is in front when it is the one on the screen and the device is "
+                     @"not locked. iOS also starts apps by itself where nobody sees them, so "
+                     @"an app can have run without ever being in front.\n"];
+  [text appendString:@"Started by launchd is launchd's own count of how often it has run a "
+                     @"service, which covers the time before Finch Logs was running, and why "
+                     @"is the reason it gave for the start.\n"];
+  if ([report[@"counting"] isKindOfClass:[NSDate class]]) {
+    [text appendFormat:@"File read is when the file of a thing that was never seen running was "
+                       @"last read, if that was since %@. Running a program reads its file, so "
+                       @"this shows what ran before Finch Logs was running, which it is not for "
+                       @"the first minute after the device starts.\n",
+                       FLFormatDay(report[@"counting"])];
+  }
   if (![report[@"listed"] boolValue]) {
     [text appendString:@"What is installed has not been listed yet, so apps, extensions and "
                        @"programs that have never run are missing. The service lists it within "
                        @"a few minutes of starting, and finchlog inventory lists it now.\n"];
   }
   [text appendString:@"\n"];
-  NSArray<NSArray<NSString *> *> *kinds = @[
-    @[
-      @"app", @"Apps", @"been opened",
-      @"name\tidentifier\t{numbers}\tkind\tsize\tfrom\tpath",
-      @"name\tidentifier\tkind\tsize\tfrom\tpath"
-    ],
-    @[
-      @"service", @"Services", @"run",
-      @"label\t{numbers}\tended with\tstarts\tsize\tfrom\tprogram\tdefined in",
-      @"label\tstarts\tsize\tfrom\tprogram\tdefined in"
-    ],
-    @[
-      @"program", @"Programs", @"run", @"path\t{numbers}\tsize\tfrom\tlast command",
-      @"path\tsize\tfrom"
-    ],
-  ];
   NSDictionary *summary = report[@"summary"];
-  for (NSArray<NSString *> *kind in kinds) {
+  NSDictionary *apps = summary[@"app"];
+  [text appendFormat:@"Apps: %@ found, %@ have been in front, %@ have never run, %@ running now\n",
+                     apps[@"total"] ?: @0, apps[@"front"] ?: @0, apps[@"never"] ?: @0,
+                     apps[@"running"] ?: @0];
+  NSArray<NSArray<NSString *> *> *others =
+    @[ @[ @"service", @"Services" ], @[ @"program", @"Programs" ] ];
+  for (NSArray<NSString *> *kind in others) {
     NSDictionary *counts = summary[kind[0]];
-    [text appendFormat:@"%@: %@ found, %@ have never %@, %@ running now\n", kind[1],
-                       counts[@"total"] ?: @0, counts[@"never"] ?: @0, kind[2],
-                       counts[@"running"] ?: @0];
+    [text appendFormat:@"%@: %@ found, %@ have never run, %@ of those had their file read, %@ "
+                       @"running now\n",
+                       kind[1], counts[@"total"] ?: @0, counts[@"never"] ?: @0,
+                       counts[@"read"] ?: @0, counts[@"running"] ?: @0];
   }
   NSArray<NSDictionary *> *rows = report[@"rows"];
+  NSString *fronted = @"name\tidentifier\ttimes in front\ttime in front\tlast in front\t"
+                      @"{numbers}\tkind\tsize\tfrom\tpath";
+  NSString *served = @"label\t{numbers}\tstarted by launchd\twhy\tended with\tstarts\tsize\t"
+                     @"from\tprogram\tdefined in";
+  NSArray<NSArray<NSString *> *> *kinds = @[
+    @[
+      @"app", @"Apps", fronted,
+      @"name\tidentifier\tkind\tsize\tfrom\tfile read\ttrouble\tpath"
+    ],
+    @[
+      @"service", @"Services", served,
+      @"label\tstarts\tsize\tfrom\tfile read\ttrouble\tprogram\tdefined in"
+    ],
+    @[
+      @"program", @"Programs", @"path\t{numbers}\tsize\tfrom\tlast command",
+      @"path\tsize\tfrom\tfile read\ttrouble"
+    ],
+  ];
   for (NSArray<NSString *> *kind in kinds) {
+    BOOL app = [kind[0] isEqualToString:@"app"];
+    NSMutableArray<NSDictionary *> *front = [NSMutableArray new];
     NSMutableArray<NSDictionary *> *ran = [NSMutableArray new];
     NSMutableArray<NSDictionary *> *never = [NSMutableArray new];
     for (NSDictionary *row in rows) {
-      if ([row[@"kind"] isEqualToString:kind[0]]) {
-        [[row[@"ran"] boolValue] ? ran : never addObject:row];
+      if (![row[@"kind"] isEqualToString:kind[0]]) {
+        continue;
+      }
+      if (app && [row[@"fronts"] unsignedLongLongValue] > 0) {
+        [front addObject:row];
+      } else if ([row[@"ran"] boolValue]) {
+        [ran addObject:row];
+      } else {
+        [never addObject:row];
       }
     }
-    [ran sortWithOptions:NSSortStable
-         usingComparator:^(NSDictionary *first, NSDictionary *second) {
-           NSDate *earlier = first[@"last"] ?: [NSDate distantPast];
-           NSDate *later = second[@"last"] ?: [NSDate distantPast];
-           return [later compare:earlier];
-         }];
-    if (!neverOnly) {
-      [text appendFormat:@"\n%@ that have %@: %lu, the latest first\n", kind[1], kind[2],
-                         (unsigned long)ran.count];
-      [text appendString:[kind[3] stringByReplacingOccurrencesOfString:@"{numbers}"
-                                                            withString:FLUsageHeadings]];
-      [text appendString:@"\n"];
-      for (NSDictionary *row in ran) {
-        [text appendFormat:@"%@\n", FLUsageLine(row, YES)];
-      }
+    [front sortWithOptions:NSSortStable usingComparator:FLLatest(@"lastFront")];
+    [ran sortWithOptions:NSSortStable usingComparator:FLLatest(@"last")];
+    if (!neverOnly && app) {
+      FLAppendRows(text, @"Apps that have been in front, the latest first", kind[2], front, YES);
+      FLAppendRows(text, @"Apps that ran without being in front, the latest first", kind[2], ran,
+                   YES);
+    } else if (!neverOnly) {
+      FLAppendRows(text, [kind[1] stringByAppendingString:@" that have run, the latest first"],
+                   kind[2], ran, YES);
     }
-    [text appendFormat:@"\n%@ that have never %@: %lu\n%@\n", kind[1], kind[2],
-                       (unsigned long)never.count, kind[4]];
-    for (NSDictionary *row in never) {
-      [text appendFormat:@"%@\n", FLUsageLine(row, NO)];
-    }
+    FLAppendRows(text, [kind[1] stringByAppendingString:@" that have never run"], kind[3], never,
+                 NO);
   }
   return text;
 }

@@ -70,6 +70,7 @@ static NSDate *FLReportedAt;
 static NSUInteger FLServicesWritten;
 static pid_t FLLister;
 static NSDate *FLListerStarted;
+static double FLListerAwake;
 static NSDate *FLListerFailed;
 static NSString *FLListerMarks;
 static dispatch_source_t FLListerExit;
@@ -364,7 +365,7 @@ static void FLImport(void) {
 }
 
 static void FLListerEnded(int status) {
-  NSTimeInterval took = -FLListerStarted.timeIntervalSinceNow;
+  NSTimeInterval took = FLAwakeSeconds() - FLListerAwake;
   NSDate *written = FLStateWritten(FLInventoryState);
   BOOL clean = WIFEXITED(status) && WEXITSTATUS(status) == 0;
   BOOL listed = clean || (written != nil && [written timeIntervalSinceDate:FLListerStarted] > 0);
@@ -375,8 +376,12 @@ static void FLListerEnded(int status) {
   FLLister = 0;
   FLListerFailed = clean ? nil : [NSDate date];
   if (listed) {
-    FLState[FLInventoryKept] =
-      @{@"at" : [NSDate date], @"marks" : FLListerMarks ?: @"", @"took" : @(took)};
+    FLState[FLInventoryKept] = @{
+      @"at" : [NSDate date],
+      @"marks" : FLListerMarks ?: @"",
+      @"took" : @(took),
+      @"boot" : FLBootIdentifier(),
+    };
     FLSaveState();
   }
   if (clean) {
@@ -432,6 +437,7 @@ static void FLStartLister(NSString *why) {
   }
   FLLister = pid;
   FLListerStarted = [NSDate date];
+  FLListerAwake = FLAwakeSeconds();
   FLNote(@"finchlogs", FLLevelInfo, @"inventory",
          @"listing what is installed in pid %d, because %@", (int)pid, why);
   FLListerExit = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid,
@@ -522,6 +528,8 @@ static void FLCheckInventory(void) {
   NSTimeInterval daily = [FLSettings number:FLSettingSnapshotInterval];
   if (written == nil || ![last isKindOfClass:[NSDictionary class]]) {
     FLStartLister(@"nothing was listed yet");
+  } else if (![last[@"boot"] isEqual:FLBootIdentifier()]) {
+    FLStartLister(@"the device started");
   } else if (![last[@"marks"] isEqual:FLInventoryMarks()]) {
     FLStartLister(@"something was installed or removed");
   } else if (daily > 0 && -written.timeIntervalSinceNow >= daily) {
