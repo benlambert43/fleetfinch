@@ -15,6 +15,7 @@ NSString *const FLCommandSettings = @"com.fleetfinch.logs.settings";
 NSString *const FLCommandWatch = @"com.fleetfinch.logs.watch";
 NSString *const FLCommandUsage = @"com.fleetfinch.logs.usage";
 NSString *const FLCommandInventory = @"com.fleetfinch.logs.inventory";
+NSString *const FLCommandRestore = @"com.fleetfinch.logs.changes.restore";
 NSString *const FLNoticeChanged = @"com.fleetfinch.logs.changed";
 NSString *const FLNoticeUsage = @"com.fleetfinch.logs.usage.ready";
 NSString *const FLNoticeInventory = @"com.fleetfinch.logs.inventory.ready";
@@ -23,6 +24,9 @@ NSString *const FLUsageReportState = @"usagereport";
 NSString *const FLInventoryState = @"inventory";
 NSString *const FLInstalledState = @"installed";
 NSString *const FLDependenciesState = @"dependencies";
+NSString *const FLTrafficState = @"traffic";
+NSString *const FLLoadedState = @"loaded";
+NSString *const FLTracedState = @"trace";
 NSString *const FLNoticeSleeping = @"com.fleetfinch.logs.sleeping";
 
 NSString *FLLivePath(void) {

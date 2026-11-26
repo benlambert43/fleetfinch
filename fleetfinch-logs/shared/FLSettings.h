@@ -7,6 +7,7 @@ extern NSString *const FLSettingResourceInterval;
 extern NSString *const FLSettingProcessInterval;
 extern NSString *const FLSettingSnapshotInterval;
 extern NSString *const FLSettingImportInterval;
+extern NSString *const FLSettingTraceInterval;
 extern NSString *const FLSettingDisabledCollectors;
 
 @interface FLSettings : NSObject

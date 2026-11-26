@@ -9,6 +9,7 @@ NSString *const FLSettingResourceInterval = @"ResourceIntervalSeconds";
 NSString *const FLSettingProcessInterval = @"ProcessIntervalSeconds";
 NSString *const FLSettingSnapshotInterval = @"SnapshotIntervalSeconds";
 NSString *const FLSettingImportInterval = @"ImportIntervalSeconds";
+NSString *const FLSettingTraceInterval = @"TraceIntervalSeconds";
 NSString *const FLSettingDisabledCollectors = @"DisabledCollectors";
 
 @implementation FLSettings
@@ -22,6 +23,7 @@ NSString *const FLSettingDisabledCollectors = @"DisabledCollectors";
     FLSettingProcessInterval : @5,
     FLSettingSnapshotInterval : @(24 * 60 * 60),
     FLSettingImportInterval : @300,
+    FLSettingTraceInterval : @1800,
     FLSettingDisabledCollectors : @[],
   };
 }

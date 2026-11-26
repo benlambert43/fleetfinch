@@ -41,6 +41,18 @@
     written = now;
     listed = list;
   }
+  static NSDate *loaded;
+  static NSDate *traced;
+  NSDate *seen = FLStateWritten(FLLoadedState);
+  NSDate *followed = FLStateWritten(FLTracedState);
+  if (cached.loaded == nil || (seen != nil && ![seen isEqualToDate:loaded])) {
+    cached.loaded = FLReadState(FLLoadedState);
+    loaded = seen;
+  }
+  if (cached.traced == nil || (followed != nil && ![followed isEqualToDate:traced])) {
+    cached.traced = FLReadState(FLTracedState);
+    traced = followed;
+  }
   return cached;
 }
 

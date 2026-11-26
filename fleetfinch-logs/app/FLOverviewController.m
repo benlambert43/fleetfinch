@@ -1,6 +1,7 @@
 #import "FLOverviewController.h"
 
 #import "FLInventoryController.h"
+#import "FLReportController.h"
 #import "FLReader.h"
 #import "FLSettings.h"
 #import "FLStatus.h"
@@ -143,6 +144,24 @@ static const NSTimeInterval FLFreshFor = 20;
                      @"device, with its size and what it offers, and where the system volume's "
                      @"space goes.";
   [sections addObject:installed];
+
+  FLSection *observed = [FLSection sectionWithTitle:@"What Was Observed"];
+  for (NSArray<NSString *> *kind in [FLReportController kinds]) {
+    FLRow *row = [FLRow linkWithTitle:kind[1]
+                               detail:kind[2]
+                               action:^{
+                                 [owner.navigationController
+                                   pushViewController:[[FLReportController alloc]
+                                                        initWithKind:kind[0]
+                                                               title:kind[1]]
+                                             animated:YES];
+                               }];
+    row.stacked = YES;
+    [observed addRow:row];
+  }
+  observed.footer = @"What the service has gathered about how each part of the system behaves, "
+                    @"and the parts of iOS that have been set aside.";
+  [sections addObject:observed];
 
   NSDictionary *resources = [self resourcesFrom:status];
   if (running && resources.count > 0) {

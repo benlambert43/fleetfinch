@@ -17,6 +17,9 @@ static const size_t FLTailStep = 128 * 1024;
 static const NSUInteger FLTailSteps = 16;
 static const NSUInteger FLSummaryLength = 300;
 static const NSTimeInterval FLRecopyAfter = 60 * 60;
+static const size_t FLHeaderLength = 2048;
+static NSString *const FLLaunchReport = @".launchd.report";
+static NSString *const FLWholeDevice = @"(the device)";
 
 static NSArray<NSDictionary *> *FLImportSources(void) {
   return @[
@@ -57,6 +60,56 @@ static NSString *FLFirstLine(NSString *path) {
     }
   }
   return line.length > FLSummaryLength ? [line substringToIndex:FLSummaryLength] : line;
+}
+
+static NSArray<NSString *> *FLReportSubject(NSString *path) {
+  NSString *file = path.lastPathComponent;
+  if ([file hasSuffix:FLLaunchReport]) {
+    NSString *plain = [file substringToIndex:file.length - FLLaunchReport.length];
+    NSRange dated = [plain rangeOfString:@"_" options:NSBackwardsSearch];
+    return dated.location == NSNotFound ? nil
+                                        : @[ [plain substringToIndex:dated.location],
+                                             @"launchd report", @"" ];
+  }
+  int handle = open(path.fileSystemRepresentation, O_RDONLY);
+  if (handle < 0) {
+    return nil;
+  }
+  char buffer[FLHeaderLength + 1] = {0};
+  ssize_t count = read(handle, buffer, FLHeaderLength);
+  close(handle);
+  char *end = count > 1 && buffer[0] == '{' ? strchr(buffer, '\n') : NULL;
+  if (end == NULL) {
+    return nil;
+  }
+  NSData *line = [NSData dataWithBytes:buffer length:(NSUInteger)(end - buffer)];
+  NSDictionary *header = [NSJSONSerialization JSONObjectWithData:line options:0 error:NULL];
+  NSString *type = [header isKindOfClass:[NSDictionary class]] ? [header[@"bug_type"] description]
+                                                               : nil;
+  if (type.length == 0) {
+    return nil;
+  }
+  NSDictionary<NSString *, NSString *> *kinds = @{
+    @"109" : @"crash report",
+    @"110" : @"kernel panic report",
+    @"198" : @"low memory report",
+    @"288" : @"stackshot",
+  };
+  NSString *name = [header[@"app_name"] description] ?: [header[@"name"] description];
+  NSString *program = @"";
+  char *marked = strstr(end, "\nPath:");
+  if (marked != NULL) {
+    char *start = marked + strlen("\nPath:");
+    start += strspn(start, " \t");
+    size_t length = strcspn(start, "\r\n");
+    program = [[NSString alloc] initWithBytes:start length:length encoding:NSUTF8StringEncoding]
+      ?: @"";
+  }
+  return @[
+    name.length > 0 ? name : FLWholeDevice,
+    kinds[type] ?: [@"report of type " stringByAppendingString:type],
+    [program hasPrefix:@"/"] ? program : @""
+  ];
 }
 
 @implementation FLImportMonitor {
@@ -186,6 +239,10 @@ static NSString *FLFirstLine(NSString *path) {
   FLNote(@"import", FLLevelNotice, path.lastPathComponent, @"copied %@ from %@%@%@",
          FLFormatBytes((uint64_t)info->st_size), path.stringByDeletingLastPathComponent,
          summary.length > 0 ? @": " : @"", summary);
+  NSArray<NSString *> *subject = FLReportSubject(path);
+  if (subject != nil && self.reported != nil) {
+    self.reported(subject[0], subject[1], subject[2]);
+  }
   return YES;
 }
 

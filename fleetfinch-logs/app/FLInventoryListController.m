@@ -22,9 +22,9 @@ static uint64_t FLInventoryBytes(NSDictionary *item) {
 }
 
 static NSUInteger FLInventoryNeed(NSDictionary *item) {
-  NSArray<NSString *> *order = @[ @"orphan", @"unseen", @"plugin", @"idle", @"opened", @"loaded" ];
+  NSArray<NSString *> *order = FLNeedOrder();
   NSUInteger rank = [order indexOfObject:item[@"need"] ?: @""];
-  return rank == NSNotFound ? order.count : rank;
+  return rank == NSNotFound ? order.count : order.count - 1 - rank;
 }
 
 static NSUInteger FLInventoryUsers(NSDictionary *item) {

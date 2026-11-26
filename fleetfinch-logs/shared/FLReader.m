@@ -40,7 +40,8 @@ static const NSUInteger FLStampWidth = 29;
 static NSArray<NSString *> *FLStreamOrder(void) {
   return @[
     @"system", @"kernel", @"boot", @"process", @"app", @"service", @"resource",
-    @"power", @"network", @"event", @"file", @"import", @"finchlogs"
+    @"power", @"network", @"connection", @"event", @"file", @"import", @"change",
+    @"finchlogs"
   ];
 }
 
@@ -103,9 +104,11 @@ static NSArray<NSString *> *FLSplitLines(NSData *data) {
     @"resource" : @"Resources",
     @"power" : @"Power",
     @"network" : @"Network",
+    @"connection" : @"Connections",
     @"event" : @"Events",
     @"file" : @"Log Files",
     @"import" : @"Dumps",
+    @"change" : @"Changes",
     @"finchlogs" : @"Finch Logs",
   };
   return titles[stream] ?: stream;
@@ -122,9 +125,11 @@ static NSArray<NSString *> *FLSplitLines(NSData *data) {
     @"resource" : @"Processor, memory, storage, network and battery use, sampled regularly",
     @"power" : @"Sleep and wake, charging, battery level, lock and display state",
     @"network" : @"Interfaces, addresses and Wi-Fi networks as they change",
+    @"connection" : @"Each connection a process made, with the server and the bytes each way",
     @"event" : @"Notifications the system posts about its own state",
     @"file" : @"Lines other parts of the system wrote to log files of their own",
     @"import" : @"Crash reports and other dumps the system wrote, as they are copied in",
+    @"change" : @"Each part of iOS that was set aside, put back or deleted with finchlog",
     @"finchlogs" : @"What Finch Logs itself is doing",
   };
   return descriptions[stream] ?: @"";

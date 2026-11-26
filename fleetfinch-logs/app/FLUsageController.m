@@ -170,6 +170,7 @@ static NSArray<NSString *> *FLUsageKinds(void) {
     }
     [pairs addObject:@[ @"Ran as", row[@"user"] ?: @"" ]];
   }
+  [pairs addObject:@[ @"Trouble", row[@"trouble"] ?: @"" ]];
   [pairs addObject:@[ [kind isEqualToString:@"service"] ? @"Program" : @"Path",
                       row[@"where"] ?: @"" ]];
   if ([row[@"command"] length] > 0) {

@@ -194,6 +194,16 @@ static NSString *const FLSnapshotSwitch = @"snapshot";
                          @[ @"Every 15 minutes", @900 ], @[ @"Every hour", @(hour) ]
                        ]
                         footer:@"How often new crash reports and dumps are copied in."]];
+  [pace addRow:[self choiceRow:@"Tracing calls and files"
+                           key:FLSettingTraceInterval
+                       choices:@[
+                         @[ @"Never", @0 ], @[ @"Every 15 minutes", @900 ],
+                         @[ @"Every 30 minutes", @1800 ], @[ @"Every hour", @(hour) ],
+                         @[ @"Every 6 hours", @(6 * hour) ]
+                       ]
+                        footer:@"Each time, for 20 seconds, every system call, kernel trap and "
+                               @"file lookup is recorded, and each program's connections to "
+                               @"other programs are read."]];
   [pace addRow:[self choiceRow:@"Full snapshots"
                            key:FLSettingSnapshotInterval
                        choices:@[

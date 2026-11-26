@@ -25,6 +25,14 @@ static NSString *FLSnapshotTitle(NSString *kind) {
     @"usage" : @"What Has Run",
     @"inventory" : @"What Is Installed",
     @"dependencies" : @"What Depends on What",
+    @"health" : @"Problems per Component",
+    @"connections" : @"Programs and Servers",
+    @"loaded" : @"Loaded Libraries",
+    @"changes" : @"Changes",
+    @"calls" : @"System Calls",
+    @"opened" : @"Files Reached",
+    @"talks" : @"Connections Between Programs",
+    @"candidates" : @"What Looks Unused",
   };
   return titles[kind] ?: kind.capitalizedString;
 }

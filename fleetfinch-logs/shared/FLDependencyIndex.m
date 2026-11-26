@@ -1,12 +1,15 @@
 #import "FLDependencyIndex.h"
 
+#import "FLLoaded.h"
+
 NSArray<NSString *> *FLNeedOrder(void) {
-  return @[ @"loaded", @"opened", @"idle", @"plugin", @"unseen", @"orphan" ];
+  return @[ @"loaded", @"seen", @"opened", @"idle", @"plugin", @"unseen", @"orphan" ];
 }
 
 NSString *FLNeedText(NSString *need) {
   NSDictionary<NSString *, NSString *> *texts = @{
     @"loaded" : @"loaded by a program that has run",
+    @"seen" : @"seen loaded in a running program",
     @"opened" : @"may be opened by a program that has run",
     @"idle" : @"needed only by programs that have never run",
     @"plugin" : @"needed only by plug-ins that nothing names",
@@ -103,6 +106,25 @@ static void FLGather(NSMutableDictionary<NSString *, NSMutableArray *> *table, N
     return item[@"name"] ?: path.lastPathComponent;
   }
   return path.lastPathComponent;
+}
+
+- (NSSet<NSString *> *)pathsLinkedFrom:(NSArray<NSString *> *)programs {
+  NSMutableSet<NSString *> *linked = [NSMutableSet new];
+  NSMutableArray<NSString *> *waiting = [programs mutableCopy];
+  while (waiting.count > 0) {
+    NSString *path = waiting.lastObject;
+    [waiting removeLastObject];
+    if ([linked containsObject:path]) {
+      continue;
+    }
+    [linked addObject:path];
+    NSDictionary *node = _nodes[path];
+    if (node[@"item"] != nil) {
+      [linked addObject:node[@"item"]];
+    }
+    [waiting addObjectsFromArray:FLListed(node[@"links"])];
+  }
+  return linked;
 }
 
 - (NSArray<NSDictionary *> *)usersOfNode:(NSDictionary *)node {
@@ -241,7 +263,131 @@ static void FLGather(NSMutableDictionary<NSString *, NSMutableArray *> *table, N
       title:@"Named By"
        rows:[self rowsForNodes:[self clientsOfItem:item]]
          to:sections];
+  NSString *own = node[@"path"];
+  if (own != nil && [node[@"type"] isEqualToString:@"program"]) {
+    [self add:@"loads"
+        title:@"Seen Loading From Files of Their Own"
+         rows:[self rowsForPaths:[self pathsLoadedBy:own]]
+           to:sections];
+  } else if (own != nil) {
+    [self add:@"loaders"
+        title:@"Seen Loaded By"
+         rows:[self rowsForPaths:FLLoadedBy(self.loaded, own)]
+           to:sections];
+  }
+  [self addTracedFor:item[@"path"] program:own to:sections];
   return sections;
+}
+
+- (NSArray<NSDictionary *> *)rowsForUses:(NSDictionary<NSString *, NSArray<NSNumber *> *> *)uses
+                                   named:(NSString * (^)(NSString *key))named {
+  NSMutableArray<NSDictionary *> *rows = [NSMutableArray new];
+  for (NSString *key in uses) {
+    NSArray<NSNumber *> *counted = uses[key];
+    NSString *path = named(key);
+    if (path.length == 0 || counted.count < 2) {
+      continue;
+    }
+    NSDictionary *node = [self nodeAtPath:path];
+    NSMutableDictionary *row = [NSMutableDictionary new];
+    row[@"title"] = node != nil ? [self nameOfNode:node] : path.lastPathComponent;
+    row[@"detail"] = [NSString stringWithFormat:@"opened %@, looked at %@ · %@", counted[0],
+                                                counted[1], path];
+    NSString *item = [self itemOfNode:node][@"path"] ?: [self itemAtPath:path][@"path"];
+    if (item != nil) {
+      row[@"item"] = item;
+    }
+    [rows addObject:row];
+  }
+  [rows sortUsingComparator:^NSComparisonResult(NSDictionary *first, NSDictionary *second) {
+    return [first[@"title"] caseInsensitiveCompare:second[@"title"]];
+  }];
+  return rows;
+}
+
+- (void)addTracedFor:(NSString *)path
+             program:(NSString *)program
+                  to:(NSMutableArray<NSDictionary *> *)sections {
+  NSArray<NSString *> *programs = self.traced[@"programs"];
+  NSDictionary<NSString *, NSDictionary *> *files = self.traced[@"files"];
+  NSDictionary<NSString *, NSDictionary *> *links = self.traced[@"links"];
+  if (![programs isKindOfClass:[NSArray class]]) {
+    return;
+  }
+  NSString * (^programAt)(NSString *) = ^NSString *(NSString *place) {
+    NSUInteger index = (NSUInteger)place.integerValue;
+    return index < programs.count ? programs[index] : nil;
+  };
+  if ([files isKindOfClass:[NSDictionary class]] && path != nil) {
+    [self add:@"readers"
+        title:@"Had Files Reached By"
+         rows:[self rowsForUses:files[path][@"by"] named:programAt]
+           to:sections];
+  }
+  NSUInteger place = program == nil ? NSNotFound : [programs indexOfObject:program];
+  if (place == NSNotFound) {
+    return;
+  }
+  NSString *own = @(place).stringValue;
+  if ([files isKindOfClass:[NSDictionary class]]) {
+    NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *reached = [NSMutableDictionary new];
+    for (NSString *area in files) {
+      NSArray<NSNumber *> *counted = files[area][@"by"][own];
+      if (counted != nil && [area hasPrefix:@"/"]) {
+        reached[area] = counted;
+      }
+    }
+    [self add:@"reads"
+        title:@"Reached Files In"
+         rows:[self rowsForUses:reached
+                          named:^NSString *(NSString *area) {
+                            return area;
+                          }]
+           to:sections];
+  }
+  if (![links isKindOfClass:[NSDictionary class]]) {
+    return;
+  }
+  NSMutableArray<NSString *> *held = [NSMutableArray new];
+  for (NSString *other in links[own]) {
+    [held addObject:programAt(other) ?: @""];
+  }
+  NSMutableArray<NSString *> *holders = [NSMutableArray new];
+  for (NSString *other in links) {
+    if (links[other][own] != nil) {
+      [holders addObject:programAt(other) ?: @""];
+    }
+  }
+  [self add:@"talksTo" title:@"Holds Connections To" rows:[self rowsForPaths:held] to:sections];
+  [self add:@"talkedTo"
+      title:@"Programs Holding Connections to It"
+       rows:[self rowsForPaths:holders]
+         to:sections];
+}
+
+- (NSArray<NSString *> *)pathsLoadedBy:(NSString *)program {
+  NSDictionary<NSString *, NSDictionary *> *libraries = self.loaded[@"libraries"];
+  NSMutableArray<NSString *> *paths = [NSMutableArray new];
+  if (![libraries isKindOfClass:[NSDictionary class]]) {
+    return paths;
+  }
+  for (NSString *path in libraries) {
+    if (![libraries[path][@"cached"] boolValue] &&
+        [FLLoadedBy(self.loaded, path) containsObject:program]) {
+      [paths addObject:path];
+    }
+  }
+  return paths;
+}
+
+- (NSArray<NSDictionary *> *)rowsForPaths:(NSArray<NSString *> *)paths {
+  NSMutableArray<NSDictionary *> *rows = [NSMutableArray new];
+  for (NSString *path in [paths sortedArrayUsingSelector:@selector(compare:)]) {
+    NSDictionary *node = [self nodeAtPath:path];
+    [rows addObject:node != nil ? [self rowForNode:node note:nil]
+                                : @{@"title" : path.lastPathComponent, @"detail" : path}];
+  }
+  return rows;
 }
 
 - (NSArray<NSArray<NSString *> *> *)entitlementsOfItem:(NSDictionary *)item {

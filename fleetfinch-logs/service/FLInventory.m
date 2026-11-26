@@ -10,6 +10,7 @@
 #import <sys/stat.h>
 #import <unistd.h>
 
+#import "FLChanges.h"
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLDependencyIndex.h"
@@ -225,7 +226,7 @@ static NSMutableDictionary *FLDescribeBundle(NSString *path, NSString *kind,
   FLPut(record, @"id", FLText(info[@"CFBundleIdentifier"]));
   FLPut(record, @"version",
         FLText(info[@"CFBundleShortVersionString"]) ?: FLText(info[@"CFBundleVersion"]));
-  *executable = FLText(info[@"CFBundleExecutable"]);
+  *executable = FLText(info[@"CFBundleExecutable"]) ?: plain;
   if ([kind isEqualToString:@"app"]) {
     NSDictionary *shown = FLBundleInfo(path);
     FLPut(record, @"name", FLText(shown[@"name"]));
@@ -349,9 +350,16 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
                                                                      length:entry->fts_pathlen];
 }
 
+- (BOOL)isSetAside:(FTSENT *)entry {
+  const char *held = FLHeldFolder.fileSystemRepresentation;
+  size_t length = strlen(held);
+  return strncmp(entry->fts_path, held, length) == 0 &&
+         (entry->fts_path[length] == '/' || entry->fts_path[length] == '\0');
+}
+
 - (void)enter:(FTSENT *)entry {
   _folders += _system ? 1 : 0;
-  NSString *kind = FLFolderKind(entry->fts_name, entry->fts_path);
+  NSString *kind = [self isSetAside:entry] ? nil : FLFolderKind(entry->fts_name, entry->fts_path);
   NSString *path = kind == nil ? nil : [self pathOf:entry];
   if (path == nil) {
     return;
@@ -494,7 +502,7 @@ static NSString *FLDescribeHeld(NSCountedSet<NSString *> *held) {
     return;
   }
   BOOL runs = (info->st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0;
-  if (regular && (runs || FLEndsWith(entry->fts_name, ".dylib")) &&
+  if (regular && (runs || FLEndsWith(entry->fts_name, ".dylib")) && ![self isSetAside:entry] &&
       [self record:entry bytes:bytes inside:item]) {
     return;
   }
@@ -567,7 +575,7 @@ static NSArray<NSMutableDictionary *> *FLSharedCacheImages(uint64_t *bytes) {
   return images;
 }
 
-static NSDictionary<NSString *, NSString *> *FLPackageOwners(void) {
+NSDictionary<NSString *, NSString *> *FLPackageOwners(void) {
   NSMutableDictionary *owners = [NSMutableDictionary new];
   NSString *folder = @"/var/lib/dpkg/info";
   NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:NULL];

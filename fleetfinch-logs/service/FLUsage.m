@@ -20,6 +20,7 @@ static const size_t FLUsageScriptLine = 255;
 static const NSTimeInterval FLUsageInventoryFor = 600;
 static NSString *const FLUsageOthers = @"others";
 static NSString *const FLUsageUnnamed = @"(too short to name)";
+static NSString *const FLCleanEnding = @"exit code 0";
 
 static FLUsageLedger *FLLedger;
 
@@ -158,7 +159,7 @@ static NSMutableDictionary *FLMutableCounts(id value) {
           continue;
         }
         NSMutableDictionary *copy = [entry mutableCopy];
-        for (NSString *field in @[ @"starters", @"endings" ]) {
+        for (NSString *field in @[ @"starters", @"endings", @"reports" ]) {
           NSMutableDictionary *counts = FLMutableCounts(copy[field]);
           if (counts != nil) {
             copy[field] = counts;
@@ -341,6 +342,9 @@ static NSMutableDictionary *FLMutableCounts(id value) {
          memory:process.footprintBytes ?: process.residentBytes
              at:now];
   _changed = YES;
+  if (self.started != nil) {
+    self.started(process);
+  }
 }
 
 - (void)began:(FLProcess *)process label:(NSString *)label starter:(NSString *)starter {
@@ -428,8 +432,81 @@ static NSMutableDictionary *FLMutableCounts(id value) {
   NSMutableDictionary *entry = _entries[key];
   if (entry != nil) {
     FLTally(entry, @"endings", ending);
+    if (![ending isEqualToString:FLCleanEnding]) {
+      entry[@"bad"] = @([entry[@"bad"] unsignedLongLongValue] + 1);
+    }
     _changed = YES;
   }
+}
+
+- (NSArray<NSString *> *)keysOfProgram:(NSString *)program {
+  NSMutableArray<NSString *> *keys =
+    [NSMutableArray arrayWithObject:[@"program:" stringByAppendingString:program]];
+  for (NSString *key in _entries) {
+    NSString *path = _entries[key][@"path"];
+    if (path.length == 0) {
+      continue;
+    }
+    if (([key hasPrefix:@"service:"] && [path isEqualToString:program]) ||
+        ([key hasPrefix:@"app:"] && [program hasPrefix:[path stringByAppendingString:@"/"]])) {
+      [keys addObject:key];
+    }
+  }
+  return keys;
+}
+
+- (NSArray<NSString *> *)keysOfSender:(NSString *)sender pid:(int)pid {
+  NSString *prefix = [NSString stringWithFormat:@"%d:", pid];
+  for (NSString *identity in pid > 0 ? _active.allKeys : @[]) {
+    if ([identity hasPrefix:prefix]) {
+      return _active[identity][@"keys"];
+    }
+  }
+  if (sender.length == 0) {
+    return @[];
+  }
+  NSString *program = [self programNamed:sender];
+  if ([program hasPrefix:@"/"]) {
+    return [self keysOfProgram:program];
+  }
+  NSString *key = [@"sender:" stringByAppendingString:sender];
+  [self entry:key name:sender path:nil];
+  return @[ key ];
+}
+
+- (void)logged:(FLLevel)level by:(NSString *)sender pid:(int)pid {
+  NSString *field = level >= FLLevelFault ? @"faults" : @"errors";
+  for (NSString *key in [self keysOfSender:sender pid:pid]) {
+    NSMutableDictionary *entry = _entries[key];
+    entry[field] = @([entry[field] unsignedLongLongValue] + 1);
+    entry[@"troubled"] = [NSDate date];
+  }
+  _drifted = YES;
+}
+
+- (void)reported:(NSString *)name kind:(NSString *)kind path:(NSString *)path {
+  if (name.length == 0 || kind.length == 0) {
+    return;
+  }
+  NSString *family = [@"service:" stringByAppendingString:FLServiceFamily(name)];
+  NSArray<NSString *> *keys = nil;
+  if (path.length > 0) {
+    keys = [self keysOfProgram:path];
+  } else if (_entries[family] != nil || [name containsString:@"."]) {
+    keys = @[ family ];
+  } else {
+    keys = [self keysOfSender:name pid:0];
+  }
+  for (NSString *key in keys) {
+    NSMutableDictionary *entry = _entries[key];
+    if (entry == nil) {
+      entry = [self entry:key name:name.lastPathComponent path:path.length > 0 ? path : nil];
+    }
+    FLTally(entry, @"reports", kind);
+    entry[@"reported"] = @([entry[@"reported"] unsignedLongLongValue] + 1);
+    entry[@"troubled"] = [NSDate date];
+  }
+  _changed = YES;
 }
 
 - (NSDictionary *)contents {
@@ -493,6 +570,21 @@ static NSString *FLDescribeCounts(NSDictionary<NSString *, NSNumber *> *counts) 
   return [parts componentsJoinedByString:@", "];
 }
 
+NSString *FLUsageTrouble(NSDictionary *entry) {
+  NSMutableArray<NSString *> *parts = [NSMutableArray new];
+  NSArray<NSArray<NSString *> *> *counted = @[
+    @[ @"reported", @"report", @"reports" ], @[ @"bad", @"bad ending", @"bad endings" ],
+    @[ @"faults", @"fault", @"faults" ], @[ @"errors", @"error", @"errors" ]
+  ];
+  for (NSArray<NSString *> *each in counted) {
+    unsigned long long count = [entry[each[0]] unsignedLongLongValue];
+    if (count > 0) {
+      [parts addObject:[NSString stringWithFormat:@"%llu %@", count, each[count == 1 ? 1 : 2]]];
+    }
+  }
+  return [parts componentsJoinedByString:@", "];
+}
+
 static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
                                 NSDictionary *details, NSDictionary *entry,
                                 NSUInteger running) {
@@ -514,6 +606,13 @@ static NSDictionary *FLUsageRow(NSString *kind, NSString *key, NSString *name,
   }
   row[@"starters"] = FLDescribeCounts(entry[@"starters"]);
   row[@"endings"] = FLDescribeCounts(entry[@"endings"]);
+  row[@"reports"] = FLDescribeCounts(entry[@"reports"]);
+  for (NSString *field in @[ @"errors", @"faults", @"bad", @"reported" ]) {
+    if ([entry[field] unsignedLongLongValue] > 0) {
+      row[field] = entry[field];
+    }
+  }
+  row[@"trouble"] = FLUsageTrouble(entry);
   if ([row[@"where"] length] == 0 && [entry[@"path"] length] > 0) {
     row[@"where"] = entry[@"path"];
   }
@@ -657,8 +756,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     NSString *key = [@"program:" stringByAppendingString:path];
     NSDictionary *entry = entries[key];
     [listed addObject:key];
-    BOOL covered = entry != nil && [entry[@"covered"] unsignedLongLongValue] >=
-                                     [entry[@"runs"] unsignedLongLongValue];
+    unsigned long long runs = [entry[@"runs"] unsignedLongLongValue];
+    BOOL covered = runs > 0 && [entry[@"covered"] unsignedLongLongValue] >= runs;
     if (covered || (entry == nil && [servicePrograms containsObject:path])) {
       continue;
     }
@@ -682,7 +781,8 @@ NSDictionary *FLUsageReport(NSDictionary *usage) {
     NSString *path = entry[@"path"] ?: @"";
     NSString *note = @"";
     if ([kind isEqualToString:@"program"]) {
-      if ([entry[@"covered"] unsignedLongLongValue] >= [entry[@"runs"] unsignedLongLongValue]) {
+      unsigned long long runs = [entry[@"runs"] unsignedLongLongValue];
+      if (runs > 0 && [entry[@"covered"] unsignedLongLongValue] >= runs) {
         continue;
       }
     } else if ([kind isEqualToString:@"app"]) {
@@ -733,15 +833,18 @@ static NSString *FLUsageNumbers(NSDictionary *row) {
     stringWithFormat:@"%@\t%@\t%@\t%@\t%@\t%.1fs\t%@\t%@", row[@"runs"] ?: @0,
                      running > 0 ? [NSString stringWithFormat:@"%lu", (unsigned long)running]
                                  : @"no",
-                     FLFormatDay(row[@"first"]), FLFormatDay(row[@"last"]),
+                     row[@"first"] == nil ? @"" : FLFormatDay(row[@"first"]),
+                     row[@"last"] == nil ? @"" : FLFormatDay(row[@"last"]),
                      FLFormatDuration([row[@"seconds"] doubleValue]),
                      [row[@"processor"] doubleValue],
                      FLFormatBytes([row[@"memory"] unsignedLongLongValue]),
-                     row[@"starters"] ?: @""];
+                     [NSString stringWithFormat:@"%@\t%@", row[@"starters"] ?: @"",
+                                                row[@"trouble"] ?: @""]];
 }
 
 static NSString *const FLUsageHeadings =
-  @"runs\trunning now\tfirst seen\tlast seen\trun time\tprocessor\tmost memory\tstarted by";
+  @"runs\trunning now\tfirst seen\tlast seen\trun time\tprocessor\tmost memory\tstarted by\t"
+  @"trouble";
 
 static NSString *FLUsageLine(NSDictionary *row, BOOL ran) {
   NSString *kind = row[@"kind"];

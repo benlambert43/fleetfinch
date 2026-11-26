@@ -10,9 +10,11 @@ export const finchLogTitles: Record<string, string> = {
   resource: "Resources",
   power: "Power",
   network: "Network",
+  connection: "Connections",
   event: "Events",
   file: "Log Files",
   import: "Dumps",
+  change: "Changes",
   finchlogs: "Finch Logs",
 };
 
@@ -33,6 +35,14 @@ export const finchSnapshotTitles: Record<string, string> = {
   usage: "What Has Run",
   inventory: "What Is Installed",
   dependencies: "What Depends on What",
+  health: "Problems per Component",
+  connections: "Programs and Servers",
+  loaded: "Loaded Libraries",
+  changes: "Changes",
+  calls: "System Calls",
+  opened: "Files Reached",
+  talks: "Connections Between Programs",
+  candidates: "What Looks Unused",
 };
 
 export interface FinchLine {
@@ -47,7 +57,9 @@ const storedLine =
   /^(\d{4}-\d\d-\d\d)T(\d\d:\d\d:\d\d\.\d{3})[+-]\d\d:\d\d\t([DINWEF])\t([^\t]*)\t(.*)$/su;
 const escaped = /\\(?:x([\da-f]{2})|(.))/giu;
 const plainEscapes: Record<string, string> = { n: "\n", t: "\t", r: "\r" };
-const labelWidth = 10;
+const labelWidth = Math.max(
+  ...Object.values(finchLogTitles).map((title) => title.length),
+);
 
 const kinds: Record<string, LogKind> = {
   W: "warning",

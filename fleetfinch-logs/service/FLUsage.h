@@ -1,8 +1,11 @@
 #import <Foundation/Foundation.h>
 
+#import "FLCommon.h"
 #import "FLSystemInfo.h"
 
 @interface FLUsageLedger : NSObject
+
+@property(nonatomic, copy) void (^started)(FLProcess *process);
 
 - (instancetype)initForBoot:(NSString *)boot;
 - (void)began:(FLProcess *)process label:(NSString *)label starter:(NSString *)starter;
@@ -25,6 +28,8 @@
            at:(NSDate *)when;
 - (void)keepOnly:(NSSet<NSString *> *)identities;
 - (void)service:(NSString *)label endedWith:(NSString *)ending;
+- (void)logged:(FLLevel)level by:(NSString *)sender pid:(int)pid;
+- (void)reported:(NSString *)name kind:(NSString *)kind path:(NSString *)path;
 - (NSDictionary *)contents;
 - (BOOL)saveIfDue;
 - (BOOL)save;
@@ -38,5 +43,6 @@ NSString *FLScriptOf(FLProcess *process);
 NSString *FLBundledServiceIdentifier(NSString *path);
 NSString *FLBundledServiceLabel(NSString *path);
 NSDictionary *FLUsageReport(NSDictionary *usage);
+NSString *FLUsageTrouble(NSDictionary *entry);
 NSString *FLUsageText(NSDictionary *report, BOOL neverOnly);
 BOOL FLWriteUsageReport(NSDictionary *report);

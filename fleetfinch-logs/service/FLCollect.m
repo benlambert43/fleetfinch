@@ -11,6 +11,8 @@
 #import <launch.h>
 
 #import "FLCommon.h"
+#import "FLReport.h"
+#import "FLReports.h"
 #import "FLSystemInfo.h"
 #import "FLUsage.h"
 
@@ -1042,11 +1044,12 @@ NSString *FLSnapshotHeading(NSString *kind, NSString *why, NSDate *taken) {
 }
 
 NSArray<NSString *> *FLCollectKinds(void) {
-  return @[
+  NSArray<NSString *> *kinds = @[
     @"environment", @"device", @"processes", @"services", @"apps", @"packages",
     @"volumes", @"network", @"power", @"kernel", @"extensions", @"sysctl", @"registry",
     @"usage"
   ];
+  return [kinds arrayByAddingObjectsFromArray:FLLiveReportKinds()];
 }
 
 NSString *FLCollectTitle(NSString *kind) {
@@ -1068,11 +1071,14 @@ NSString *FLCollectTitle(NSString *kind) {
     @"inventory" : @"What is installed",
     @"dependencies" : @"What depends on what",
   };
-  return titles[kind] ?: kind;
+  return titles[kind] ?: FLReportTitle(kind);
 }
 
 NSString *FLCollect(NSString *kind) {
   @autoreleasepool {
+    if ([FLLiveReportKinds() containsObject:kind]) {
+      return FLReportText(FLBuildReport(kind, FLCurrentReportSource()));
+    }
     if ([kind isEqualToString:@"environment"]) {
       return FLCollectEnvironment();
     }

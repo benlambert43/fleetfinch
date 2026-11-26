@@ -502,12 +502,15 @@ static NSArray<NSString *> *FLPathsOf(NSArray<FLNode *> *nodes) {
     }
   }
   NSIndexSet *plugged = [self reachFrom:unseen soft:YES];
+  NSDictionary *seen = FLReadState(FLLoadedState)[@"libraries"];
   for (FLNode *node in _nodes) {
     if (node.image == nil || [node.image isProgram]) {
       continue;
     }
     if ([loaded containsIndex:node.index]) {
       node.need = @"loaded";
+    } else if ([seen isKindOfClass:[NSDictionary class]] && seen[node.path] != nil) {
+      node.need = @"seen";
     } else if ([opened containsIndex:node.index]) {
       node.need = @"opened";
     } else if ([named containsIndex:node.index]) {
@@ -876,6 +879,8 @@ NSString *FLDependsText(NSDictionary *dependencies, NSDictionary *inventory, NSS
                         NSDictionary *usage) {
   FLDependencyIndex *index = [[FLDependencyIndex alloc] initWithDependencies:dependencies
                                                                    inventory:inventory];
+  index.loaded = FLReadState(FLLoadedState);
+  index.traced = FLReadState(FLTracedState);
   NSArray<NSDictionary *> *found = [index itemsNamed:name];
   NSMutableString *text = [NSMutableString new];
   if (found.count == 0) {

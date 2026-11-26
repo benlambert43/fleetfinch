@@ -12,6 +12,7 @@ extern NSString *const FLCommandSettings;
 extern NSString *const FLCommandWatch;
 extern NSString *const FLCommandUsage;
 extern NSString *const FLCommandInventory;
+extern NSString *const FLCommandRestore;
 extern NSString *const FLNoticeChanged;
 extern NSString *const FLNoticeUsage;
 extern NSString *const FLNoticeInventory;
@@ -20,6 +21,9 @@ extern NSString *const FLUsageReportState;
 extern NSString *const FLInventoryState;
 extern NSString *const FLInstalledState;
 extern NSString *const FLDependenciesState;
+extern NSString *const FLTrafficState;
+extern NSString *const FLLoadedState;
+extern NSString *const FLTracedState;
 extern NSString *const FLNoticeSleeping;
 
 typedef NS_ENUM(NSInteger, FLLevel) {

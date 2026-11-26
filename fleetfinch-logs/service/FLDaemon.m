@@ -6,13 +6,17 @@
 #import <sys/utsname.h>
 #import <sys/wait.h>
 
+#import "FLChanges.h"
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLInventory.h"
 #import "FLMonitors.h"
+#import "FLReport.h"
+#import "FLReports.h"
 #import "FLSettings.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
+#import "FLTrace.h"
 
 extern char **environ;
 extern void xpc_transaction_begin(void);
@@ -21,6 +25,13 @@ extern int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, v
 
 static const uint32_t FLSetHighWaterMark = 5;
 static const uint32_t FLMemoryLimitMegabytes = 16;
+static const NSTimeInterval FLLookSoon = 2;
+static const NSTimeInterval FLLookLater = 20;
+static const NSTimeInterval FLLookEvery = 300;
+static const NSTimeInterval FLTraceFirst = 180;
+static const NSTimeInterval FLTracedFresh = 600;
+static NSString *const FLTraceSeconds = @"20";
+static NSString *const FLTraceKept = @"traceSnapshot";
 
 static NSString *const FLDaemonState = @"daemon";
 static NSString *const FLStatusState = @"status";
@@ -36,6 +47,7 @@ static const NSTimeInterval FLReportEvery = 30;
 static const NSTimeInterval FLInventoryFirst = 60;
 static const NSTimeInterval FLInventoryCheck = 600;
 static const NSTimeInterval FLInventoryRetry = 3600;
+static const NSTimeInterval FLTrafficInterval = 60;
 static NSString *const FLInventoryKept = @"inventory";
 static NSString *const FLInstalledProgram = @"/usr/bin/finchlog";
 
@@ -61,6 +73,7 @@ static NSDate *FLListerStarted;
 static NSDate *FLListerFailed;
 static NSString *FLListerMarks;
 static dispatch_source_t FLListerExit;
+static NSMutableDictionary<NSString *, NSDate *> *FLReportsWritten;
 
 static FLSyslogMonitor *FLSyslog;
 static FLKernelMonitor *FLKernel;
@@ -70,12 +83,40 @@ static FLPowerMonitor *FLPower;
 static FLNetworkMonitor *FLNetwork;
 static FLEventMonitor *FLEvents;
 static FLImportMonitor *FLImports;
+static FLTrafficMonitor *FLTraffic;
+static FLLoadedMonitor *FLLoaded;
+static pid_t FLTracer;
+static BOOL FLTracerTraces;
+static dispatch_source_t FLTracerExit;
 static FLUsageLedger *FLRunLedger;
 
 static NSArray<NSString *> *FLFrequentKinds(void) {
-  return @[
+  NSArray<NSString *> *kinds = @[
     @"processes", @"services", @"volumes", @"network", @"power", @"kernel", @"usage"
   ];
+  return [kinds arrayByAddingObjectsFromArray:FLLiveReportKinds()];
+}
+
+static void FLStartTracer(BOOL tracing);
+
+static void FLWriteReport(NSString *kind) {
+  NSDate *last = FLReportsWritten[kind];
+  if ([FLTracedReportKinds() containsObject:kind]) {
+    NSDate *written = FLStateWritten(FLReportState(kind));
+    if (written == nil || -written.timeIntervalSinceNow >= FLTracedFresh) {
+      FLStartTracer(NO);
+    }
+    notify_post(FLReportNotice(kind).UTF8String);
+    return;
+  }
+  if (last == nil || -last.timeIntervalSinceNow >= FLReportEvery) {
+    NSDictionary *report = FLBuildReport(kind, FLCurrentReportSource());
+    if (report != nil) {
+      FLWriteCompactState(FLReportState(kind), report);
+    }
+    FLReportsWritten[kind] = [NSDate date];
+  }
+  notify_post(FLReportNotice(kind).UTF8String);
 }
 
 static BOOL FLRecords(NSString *stream) {
@@ -377,6 +418,8 @@ static void FLStartLister(NSString *why) {
     argv[index] = (char *)arguments[index].UTF8String;
   }
   pid_t pid = 0;
+  [FLRunLedger save];
+  [FLLoaded save];
   FLListerMarks = FLInventoryMarks();
   int failed = posix_spawn(&pid, program.fileSystemRepresentation, NULL, NULL, argv, environ);
   free(argv);
@@ -400,6 +443,71 @@ static void FLStartLister(NSString *why) {
   });
   dispatch_resume(FLListerExit);
   FLReapLister();
+}
+
+static void FLReapTracer(void) {
+  int status = 0;
+  if (FLTracer <= 0 || waitpid(FLTracer, &status, WNOHANG) != FLTracer) {
+    return;
+  }
+  if (FLTracerExit != nil) {
+    dispatch_source_cancel(FLTracerExit);
+    FLTracerExit = nil;
+  }
+  FLTracer = 0;
+  BOOL tracing = FLTracerTraces;
+  FLTracerTraces = NO;
+  if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+    for (NSString *kind in FLTracedReportKinds()) {
+      notify_post(FLReportNotice(kind).UTF8String);
+    }
+    return;
+  }
+  FLNote(@"finchlogs", FLLevelWarning, @"trace", @"the helper that %@ ended with %@%@",
+         tracing ? @"traces" : @"writes the lists made from traces", FLDescribeExit(status),
+         tracing && FLTraceRelease() ? @", so the kernel's trace was switched off for it" : @"");
+}
+
+static void FLStartTracer(BOOL tracing) {
+  FLReapTracer();
+  if (FLTracer > 0 || (tracing && FLLister > 0 && !FLReapLister())) {
+    return;
+  }
+  NSString *program = [NSBundle mainBundle].executablePath ?: FLInstalledProgram;
+  NSMutableArray<NSString *> *arguments = [@[ program.lastPathComponent ] mutableCopy];
+  [arguments addObjectsFromArray:tracing ? @[ @"trace", @"--quiet", @"--for", FLTraceSeconds ]
+                                         : @[ @"reports", @"--save" ]];
+  NSDate *kept = [FLState[FLTraceKept] isKindOfClass:[NSDate class]] ? FLState[FLTraceKept] : nil;
+  NSTimeInterval daily = [FLSettings number:FLSettingSnapshotInterval];
+  if (tracing && FLRecords(@"snapshot") && daily > 0 &&
+      (kept == nil || -kept.timeIntervalSinceNow >= daily)) {
+    [arguments addObjectsFromArray:@[ @"--snapshot", @"--reason", @"it was time for a new one" ]];
+    FLState[FLTraceKept] = [NSDate date];
+  }
+  char **argv = calloc(arguments.count + 1, sizeof(char *));
+  for (NSUInteger index = 0; index < arguments.count; index++) {
+    argv[index] = (char *)arguments[index].UTF8String;
+  }
+  pid_t pid = 0;
+  [FLRunLedger save];
+  [FLLoaded save];
+  int failed = posix_spawn(&pid, program.fileSystemRepresentation, NULL, NULL, argv, environ);
+  free(argv);
+  if (failed != 0) {
+    FLNote(@"finchlogs", FLLevelWarning, @"trace", @"the helper that traces could not be "
+                                                   @"started: %s",
+           strerror(failed));
+    return;
+  }
+  FLTracer = pid;
+  FLTracerTraces = tracing;
+  FLTracerExit = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, (uintptr_t)pid,
+                                        DISPATCH_PROC_EXIT, FLWork);
+  dispatch_source_set_event_handler(FLTracerExit, ^{
+    FLReapTracer();
+  });
+  dispatch_resume(FLTracerExit);
+  FLReapTracer();
 }
 
 static void FLCheckInventory(void) {
@@ -564,6 +672,17 @@ static void FLSchedule(void) {
   FLEvery(@"heartbeat", 60, 60, ^{
     FLSaveState();
     [FLRunLedger saveIfDue];
+    [FLTraffic saveIfDue];
+    [FLLoaded saveIfDue];
+  });
+  FLEvery(@"loaded", FLLookEvery, FLLookEvery, ^{
+    [FLLoaded sweep];
+  });
+  FLEvery(@"trace", [FLSettings number:FLSettingTraceInterval], FLTraceFirst, ^{
+    FLStartTracer(YES);
+  });
+  FLEvery(@"traffic", FLRecords(@"connection") ? FLTrafficInterval : 0, 30, ^{
+    [FLTraffic refresh];
   });
   FLEvery(@"live", 5, 5, ^{
     FLWriteLive(NO);
@@ -583,6 +702,8 @@ static void FLStop(int signal) {
   [FLSyslog stop];
   FLSaveState();
   [FLRunLedger save];
+  [FLTraffic save];
+  [FLLoaded save];
   [[FLStore shared] sync];
   exit(0);
 }
@@ -643,9 +764,33 @@ int FLRunDaemon(void) {
   FLNetwork = [FLNetworkMonitor new];
   FLEvents = [FLEventMonitor new];
   FLImports = [FLImportMonitor new];
+  FLTraffic = [FLTrafficMonitor new];
+  FLLoaded = [FLLoadedMonitor new];
   FLRunLedger = [[FLUsageLedger alloc] initForBoot:FLBootIdentifier()];
   FLSetUsageLedger(FLRunLedger);
   FLProcesses.ledger = FLRunLedger;
+  FLReportsWritten = [NSMutableDictionary new];
+  FLSetReportSource(^NSDictionary *(NSString *name) {
+    if ([name isEqualToString:FLUsageState]) {
+      return [FLRunLedger contents];
+    }
+    if ([name isEqualToString:FLLoadedState]) {
+      return [FLLoaded contents];
+    }
+    return [name isEqualToString:FLTrafficState] ? [FLTraffic contents] : FLReadState(name);
+  });
+  FLRunLedger.started = ^(FLProcess *process) {
+    [FLLoaded noticed:process after:FLLookSoon];
+    [FLLoaded noticed:process after:FLLookLater];
+  };
+  FLSyslog.troubled = ^(NSString *sender, int pid, FLLevel level) {
+    dispatch_async(FLWork, ^{
+      [FLRunLedger logged:level by:sender pid:pid];
+    });
+  };
+  FLImports.reported = ^(NSString *name, NSString *kind, NSString *path) {
+    [FLRunLedger reported:name kind:kind path:path];
+  };
   if ([FLState[@"boot"] isEqualToString:FLBootIdentifier()] &&
       [FLState[@"kernelSeen"] isKindOfClass:[NSData class]]) {
     FLKernel.seen = [[NSString alloc] initWithData:FLState[@"kernelSeen"]
@@ -673,6 +818,10 @@ int FLRunDaemon(void) {
       FLWriteStatus();
       [FLProcesses poll];
       [FLProcesses watchOnQueue:FLWork];
+      if (FLRecords(@"connection")) {
+        [FLTraffic startOnQueue:FLWork];
+      }
+      [FLLoaded startOnQueue:FLWork];
       [FLResources sample:NO];
       FLWriteStatus();
       [FLEvents startOnQueue:FLWork
@@ -699,6 +848,7 @@ int FLRunDaemon(void) {
   FLOnCommand(FLCommandSnapshot, ^{
     FLNote(@"finchlogs", FLLevelInfo, @"command", @"Asked to take every snapshot now");
     FLTakeSnapshots(FLCollectKinds(), @"it was asked for");
+    [FLState removeObjectForKey:FLTraceKept];
     FLStartLister(@"it was asked for");
   });
   FLOnCommand(FLCommandInventory, ^{
@@ -721,12 +871,31 @@ int FLRunDaemon(void) {
   });
   FLOnCommand(FLCommandUsage, ^{
     [FLRunLedger save];
+    [FLTraffic save];
+    [FLLoaded save];
     if (FLReportedAt == nil || -FLReportedAt.timeIntervalSinceNow >= FLReportEvery) {
       FLWriteUsageReport(FLUsageReport([FLRunLedger contents]));
       FLReportedAt = [NSDate date];
     }
     notify_post(FLNoticeUsage.UTF8String);
   });
+  for (NSString *kind in FLReportKinds()) {
+    FLOnCommand(FLReportCommand(kind), ^{
+      FLWriteReport(kind);
+    });
+  }
+  int restoring = 0;
+  notify_register_dispatch(FLCommandRestore.UTF8String, &restoring, FLWork, ^(int fired) {
+    FLGuard(FLCommandRestore, ^{
+      uint64_t number = 0;
+      if (notify_get_state(fired, &number) == NOTIFY_STATUS_OK && number > 0) {
+        FLRestoreChange(@(number), @"as asked in the app");
+        [FLReportsWritten removeObjectForKey:@"changes"];
+        FLWriteReport(@"changes");
+      }
+    });
+  });
+  FLWatchChanges(FLWork);
   FLOnCommand(FLCommandWatch, ^{
     BOOL already = FLWatched();
     FLWatchedUntil = [NSDate dateWithTimeIntervalSinceNow:FLWatchWindow];

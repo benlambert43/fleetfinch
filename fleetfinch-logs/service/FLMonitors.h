@@ -11,6 +11,7 @@ void FLNote(NSString *stream, FLLevel level, NSString *source, NSString *format,
 
 @property(atomic, readonly) BOOL connected;
 @property(atomic, readonly) NSUInteger received;
+@property(atomic, copy) void (^troubled)(NSString *sender, int pid, FLLevel level);
 
 - (void)start;
 - (void)stop;
@@ -66,6 +67,27 @@ void FLNote(NSString *stream, FLLevel level, NSString *source, NSString *format,
 
 @end
 
+@interface FLTrafficMonitor : NSObject
+
+- (void)startOnQueue:(dispatch_queue_t)queue;
+- (void)refresh;
+- (NSDictionary *)contents;
+- (BOOL)saveIfDue;
+- (BOOL)save;
+
+@end
+
+@interface FLLoadedMonitor : NSObject
+
+- (void)startOnQueue:(dispatch_queue_t)queue;
+- (void)sweep;
+- (void)noticed:(FLProcess *)process after:(NSTimeInterval)delay;
+- (NSDictionary *)contents;
+- (BOOL)saveIfDue;
+- (BOOL)save;
+
+@end
+
 @interface FLEventMonitor : NSObject
 
 - (void)startOnQueue:(dispatch_queue_t)queue
@@ -76,6 +98,8 @@ void FLNote(NSString *stream, FLLevel level, NSString *source, NSString *format,
 @end
 
 @interface FLImportMonitor : NSObject
+
+@property(nonatomic, copy) void (^reported)(NSString *name, NSString *kind, NSString *path);
 
 - (NSDictionary *)scan;
 

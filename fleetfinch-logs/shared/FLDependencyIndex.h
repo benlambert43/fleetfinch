@@ -4,6 +4,8 @@
 
 @property(nonatomic, strong, readonly) NSDictionary *dependencies;
 @property(nonatomic, strong, readonly) NSDictionary *inventory;
+@property(nonatomic, strong) NSDictionary *loaded;
+@property(nonatomic, strong) NSDictionary *traced;
 
 - (instancetype)initWithDependencies:(NSDictionary *)dependencies
                            inventory:(NSDictionary *)inventory;
@@ -19,6 +21,7 @@
 - (NSArray<NSDictionary *> *)relationsOfItem:(NSDictionary *)item;
 - (NSArray<NSArray<NSString *> *> *)entitlementsOfItem:(NSDictionary *)item;
 - (NSArray<NSDictionary *> *)itemsNamed:(NSString *)name;
+- (NSSet<NSString *> *)pathsLinkedFrom:(NSArray<NSString *> *)programs;
 
 @end
 

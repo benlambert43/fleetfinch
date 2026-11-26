@@ -409,6 +409,7 @@ NSDictionary *FLReadEntitlements(int handle, FLImage *image) {
       image = [NSMutableDictionary new];
       image[@"path"] = path;
       image[@"offset"] = @(offset);
+      image[@"address"] = address;
       known[address] = image;
       [images addObject:image];
     }

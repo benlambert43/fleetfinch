@@ -300,11 +300,19 @@ static NSDate *FLDateFromSyslog(NSString *stamp, NSDate *now) {
     sender = [sender substringToIndex:extra.location];
   }
   BOOL old = fabs([stamped timeIntervalSinceDate:now]) > 2.0;
+  FLLevel severity = FLLevelFromSyslog(level);
   [[FLStore shared] log:@"system"
-                  level:FLLevelFromSyslog(level)
+                  level:severity
                  source:sender
                 message:message
                    date:old ? stamped : now];
+  void (^troubled)(NSString *, int, FLLevel) = self.troubled;
+  if (severity >= FLLevelError && !backlog && troubled != nil) {
+    NSRange bracket = [sender rangeOfString:@"[" options:NSBackwardsSearch];
+    BOOL numbered = bracket.location != NSNotFound && [sender hasSuffix:@"]"];
+    troubled(numbered ? [sender substringToIndex:bracket.location] : sender,
+             numbered ? [sender substringFromIndex:NSMaxRange(bracket)].intValue : 0, severity);
+  }
   return backlog;
 }
 

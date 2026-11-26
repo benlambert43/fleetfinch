@@ -3,6 +3,7 @@
 #import <sys/resource.h>
 #import <sys/utsname.h>
 
+#import "FLChanges.h"
 #import "FLCollect.h"
 #import "FLCommon.h"
 #import "FLDaemon.h"
@@ -10,10 +11,13 @@
 #import "FLDump.h"
 #import "FLInventory.h"
 #import "FLReader.h"
+#import "FLReport.h"
+#import "FLReports.h"
 #import "FLSettings.h"
 #import "FLStatus.h"
 #import "FLStore.h"
 #import "FLSystemInfo.h"
+#import "FLTrace.h"
 #import "FLUsage.h"
 
 static NSString *const FLTrailer = @"@@finchlog";
@@ -69,6 +73,27 @@ static int FLShowUsage(void) {
           @"  finchlog depends [NAME] [--fresh]\n"
           @"                                   what NAME links, opens by name and names, and what\n"
           @"                                   does the same to it; with no NAME, all of it\n"
+          @"  finchlog health                  the reports, bad endings, faults and errors of\n"
+          @"                                   each component\n"
+          @"  finchlog connections             which programs talk to which servers\n"
+          @"  finchlog loaded                  the libraries and plug-ins running programs have\n"
+          @"                                   really loaded\n"
+          @"  finchlog trace [--for S] [--name PROGRAM]\n"
+          @"                                   record every system call, kernel trap and file\n"
+          @"                                   lookup for S seconds (20 unless told), and with\n"
+          @"                                   --name, everything one program did\n"
+          @"  finchlog candidates              what nothing recorded so far has used, by size\n"
+          @"  finchlog calls | opened | talks  what the traces have gathered: the calls each\n"
+          @"                                   program makes, which parts of the system had\n"
+          @"                                   files opened, and who holds connections to whom\n"
+          @"  finchlog hold NAME [--note TEXT] [--force] [--check]\n"
+          @"                                   set a part of iOS aside where iOS no longer finds\n"
+          @"                                   it; NAME is a path, a launch service or a name,\n"
+          @"                                   and --check only says whether it would be done\n"
+          @"  finchlog restore NUMBER          put what a change set aside back where it was\n"
+          @"  finchlog store NUMBER            move it off the system volume to free the space\n"
+          @"  finchlog discard NUMBER --yes    delete it for good\n"
+          @"  finchlog changes                 each change, and what differs since it was made\n"
           @"  finchlog snapshot | import | maintain | reload\n"
           @"                                   ask the service to do that now\n"
           @"  finchlog daemon                  run the service (launchd does this)\n"
@@ -379,7 +404,8 @@ static int FLShowDepends(NSArray<NSString *> *arguments) {
 static int FLRunCollect(NSArray<NSString *> *arguments) {
   NSString *kind = arguments.count > 0 ? arguments[0] : nil;
   if (kind == nil || [kind isEqualToString:@"list"]) {
-    NSArray<NSString *> *listed = @[ FLInventorySnapshot, FLDependenciesSnapshot ];
+    NSArray<NSString *> *listed = [@[ FLInventorySnapshot, FLDependenciesSnapshot ]
+      arrayByAddingObjectsFromArray:FLTracedReportKinds()];
     for (NSString *name in [FLCollectKinds() arrayByAddingObjectsFromArray:listed]) {
       FLPrint([NSString stringWithFormat:@"%@\t%@\n", name, FLCollectTitle(name)]);
     }
@@ -391,6 +417,10 @@ static int FLRunCollect(NSArray<NSString *> *arguments) {
   if ([kind isEqualToString:FLDependenciesSnapshot]) {
     return FLShowDepends(@[ @"--fresh" ]);
   }
+  if ([FLTracedReportKinds() containsObject:kind]) {
+    FLPrint(FLReportText(FLBuildReport(kind, FLCurrentReportSource())));
+    return 0;
+  }
   NSString *text = FLCollect(kind);
   if (text == nil) {
     fprintf(stderr, "finchlog: there is nothing called %s to collect\n", kind.UTF8String);
@@ -400,18 +430,55 @@ static int FLRunCollect(NSArray<NSString *> *arguments) {
   return 0;
 }
 
-static int FLPrintUsage(NSArray<NSString *> *arguments) {
-  if (FLServiceRunning(FLServiceStatus())) {
-    dispatch_semaphore_t saved = dispatch_semaphore_create(0);
-    int token = 0;
-    notify_register_dispatch(FLNoticeUsage.UTF8String, &token,
-                             dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(int fired) {
-                               dispatch_semaphore_signal(saved);
-                             });
-    FLPostCommand(FLCommandUsage);
-    dispatch_semaphore_wait(saved, dispatch_time(DISPATCH_TIME_NOW, FLUsageWait * NSEC_PER_SEC));
-    notify_cancel(token);
+static void FLAskToSave(void) {
+  if (!FLServiceRunning(FLServiceStatus())) {
+    return;
   }
+  dispatch_semaphore_t saved = dispatch_semaphore_create(0);
+  int token = 0;
+  notify_register_dispatch(FLNoticeUsage.UTF8String, &token,
+                           dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^(int fired) {
+                             dispatch_semaphore_signal(saved);
+                           });
+  FLPostCommand(FLCommandUsage);
+  dispatch_semaphore_wait(saved, dispatch_time(DISPATCH_TIME_NOW, FLUsageWait * NSEC_PER_SEC));
+  notify_cancel(token);
+}
+
+static int FLShowReport(NSArray<NSString *> *arguments) {
+  NSString *word = arguments.count > 0 ? arguments[0] : nil;
+  NSString *kind = word == nil ? nil : FLReportKindNamed(word);
+  if (kind == nil) {
+    for (NSString *each in FLReportKinds()) {
+      FLPrint([NSString stringWithFormat:@"%@\t%@\n", each, FLReportTitle(each)]);
+    }
+    return word == nil ? 0 : 64;
+  }
+  FLAskToSave();
+  FLPrint(FLReportText(FLBuildReport(kind, FLCurrentReportSource())));
+  return 0;
+}
+
+static int FLSaveReports(void) {
+  NSMutableDictionary<NSString *, NSDictionary *> *read = [NSMutableDictionary new];
+  FLReportSource source = ^NSDictionary *(NSString *name) {
+    if (read[name] == nil) {
+      read[name] = FLReadState(name) ?: @{};
+    }
+    return read[name];
+  };
+  BOOL saved = YES;
+  setpriority(PRIO_PROCESS, 0, FLHelperNiceness);
+  for (NSString *kind in FLTracedReportKinds()) {
+    @autoreleasepool {
+      saved = FLWriteCompactState(FLReportState(kind), FLBuildReport(kind, source)) && saved;
+    }
+  }
+  return saved ? 0 : 1;
+}
+
+static int FLPrintUsage(NSArray<NSString *> *arguments) {
+  FLAskToSave();
   NSDictionary *usage = FLCurrentUsage();
   if (usage.count == 0) {
     fprintf(stderr, "finchlog: nothing has been counted yet; the service has not run\n");
@@ -481,6 +548,23 @@ int main(int argc, char **argv) {
     }
     if ([command isEqualToString:@"depends"]) {
       return FLShowDepends(arguments);
+    }
+    if ([command isEqualToString:@"report"]) {
+      return FLShowReport(arguments);
+    }
+    if ([command isEqualToString:@"reports"] && [arguments containsObject:@"--save"]) {
+      return FLSaveReports();
+    }
+    if ([command isEqualToString:@"trace"]) {
+      return FLTraceCommand(arguments);
+    }
+    if ([@[ @"hold", @"restore", @"store", @"discard" ] containsObject:command]) {
+      return FLChangeCommand(command, arguments, ^{
+        FLAskToSave();
+      });
+    }
+    if (FLReportKindNamed(command) != nil) {
+      return FLShowReport(@[ command ]);
     }
     if ([command isEqualToString:@"snapshot"]) {
       return FLAsk(FLCommandSnapshot, @"Asked the service to take every snapshot now.");
