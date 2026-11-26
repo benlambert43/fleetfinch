@@ -28,4 +28,4 @@ The app opens on a tab bar with four screens. For now every feature is a placeho
 
 Every screen is a grouped list built by `app/FFListController.m`: a screen returns its sections from `buildSections`, each with a header, rows and a footer, and a row with an `about` text opens `app/FFPlaceholderController.m`. Rows are one line each, title on the left and value on the right, so they keep their height at iPhone width on iOS 9. `app/FFTheme.m` holds the tint color and draws the tab icons.
 
-The icon is Finch Logs' finch without its log lines, and the launch images are Finch Logs' own, until Fleet Finch has artwork of its own.
+The icon is the finch on its branch, from `assets/finch.png` at the top of the repository, on a white a shade warmer than pure white, `#FFFCF7`. The launch images show the same finch in the middle of the screen on the same white. [Artwork](../README.md#artwork) in the main README says how the files in `app/Resources` are made.

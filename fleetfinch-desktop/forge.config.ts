@@ -5,7 +5,7 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 
 const config: ForgeConfig = {
-  packagerConfig: { asar: true },
+  packagerConfig: { asar: true, icon: "assets/icon" },
   makers: [new MakerZIP()],
   hooks: {
     preStart: () => {

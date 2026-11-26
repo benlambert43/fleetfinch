@@ -212,6 +212,25 @@ The desktop app sets its text in the Dynamic Type styles of iOS 7, at the sizes 
 | `text-subheadline` | 15 pixels, Regular | Keyboard shortcuts in the menu     |
 | `text-footnote`    | 13 pixels, Regular | The labels of the theme toggle     |
 
+## Artwork
+
+`assets` holds the two drawings that every app icon is made from. The web app and `fleetfinch-lite` still show the pencil sketch.
+
+| File                    | What it holds                                                                                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `assets/finch.png`      | The finch on its branch with a transparent background, 1024 pixels square. The drawing sits in the center at 80% of the width, so a tenth of the width is clear on each side and more above and below, and nothing is cut off where a corner is rounded |
+| `assets/finch-logs.svg` | The mark of Finch Logs: the outline of a log file in the finch's blue, `#4E8DB4`, holding three lines in its orange, `#F87E12`, and the brown of its branch, `#725642`                                                                                  |
+
+Where an icon or a logo cannot be transparent, it sits on `#FFFCF7`, a white a shade warmer than pure white.
+
+| Folder                          | What is made from them                                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fleetfinch-app/app/Resources`  | The icon of Fleet Finch, which is the finch on the warm white at every size iOS 9 asks for, and its launch images, which show the finch in the middle of the screen on the same white |
+| `fleetfinch-logs/app/Resources` | The icon of Finch Logs, which is the mark on the warm white at the same sizes, and the same launch images                                                                             |
+| `fleetfinch-desktop/assets`     | The icon of FleetFinch Developer, which is the finch on a warm white square with rounded corners: `icon.png` for Linux, `icon.ico` for Windows and `icon.icns` for macOS              |
+
+iOS rounds the corners of an icon itself, so the icons of the two iOS apps are plain squares with no transparency. Nothing in a build draws these files: they were made once from the two in `assets`, so a change to either drawing means making them again at every size.
+
 ## Web app
 
 The web app's home page has the same content as `fleetfinch-lite`, the version of it for Safari 9, so change the two together. It keeps the lite site's look and behavior but uses what a current browser offers:
@@ -340,8 +359,9 @@ Paths are inside `fleetfinch-desktop`.
 | `src/main/finchLogImport.ts`         | Import Log Dump: copies a device's whole store to a file with `finchlog dump`, or opens a dump file, and shows its logs and snapshots under Device                                                                                                                                                                                                                                     |
 | `src/renderer/logs.ts`               | The window's copy of the logs, kept current from the main process, with the tab and the group shown on each                                                                                                                                                                                                                                                                            |
 | `src/renderer/Logs.tsx`              | The Logs page: a tab for the app, this computer and the device, each listing its launches, tasks or logs beside the selected one's lines, with a filter and a copy button, and under Device the switch that tails devices and Import Log Dump                                                                                                                                          |
-| `src/main/index.ts`                  | The window, and the security rules listed below                                                                                                                                                                                                                                                                                                                                        |
-| `forge.config.ts`                    | Electron Forge: packaging, the Vite builds, and the fuses                                                                                                                                                                                                                                                                                                                              |
+| `src/main/index.ts`                  | The window, its icon on Linux, and the security rules listed below                                                                                                                                                                                                                                                                                                                     |
+| `forge.config.ts`                    | Electron Forge: packaging, the icon, the Vite builds, and the fuses                                                                                                                                                                                                                                                                                                                    |
+| `assets`                             | The icon, as `icon.png`, `icon.ico` and `icon.icns`. Electron Packager puts `icon.icns` into a macOS app and `icon.ico` into a Windows one. A Linux program file has no place for an icon, so `src/main/index.ts` gives the window `icon.png`, which Vite compiles into the main process                                                                                               |
 
 The bridge is for what only the main process can do, such as reading the app version and reading or saving the theme. To add a call, add it to `BridgeMethods`. TypeScript then fails until the preload script exposes it and `handlers.ts` implements it.
 
@@ -389,7 +409,7 @@ The Devices page lists every device added over SSH, and each one opens a page of
 
 - **`VITE_API_BASE_URL`** in `fleetfinch-desktop/.env` is compiled into the app. A release build needs the production address in the environment or in `.env.production`, and packaging fails without a valid one. CI packages with a local address, only to prove that the app builds.
 - **`EXTRA_ALLOWED_ORIGINS`** in `fleetfinch-server/.env` lists where the window is served from, because the API answers only the origins it knows: `http://localhost:5173` for the dev server and `app://renderer` for the packaged app. The server reduces each entry to the origin a browser sends, so a trailing slash or capital letters do no harm.
-- **Shipping.** `npm run build:desktop` produces an unsigned app with the default icon. Signing, notarization, installers, an icon, a bundle identifier of your own, and updates are all [Electron Forge](https://www.electronforge.io) configuration, to add in `forge.config.ts` when the app ships.
+- **Shipping.** `npm run build:desktop` produces an unsigned app with the icon in `assets`, described under [Artwork](#artwork). `icon.ico` and `icon.icns` were written on Linux and have not been seen on Windows or macOS yet. Signing, notarization, installers, a bundle identifier of your own, and updates are all [Electron Forge](https://www.electronforge.io) configuration, to add in `forge.config.ts` when the app ships.
 
 ### Development
 

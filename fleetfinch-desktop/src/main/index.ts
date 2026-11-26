@@ -5,6 +5,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  nativeImage,
   nativeTheme,
   net,
   protocol,
@@ -24,6 +25,8 @@ import { logApp, logAppError } from "@/main/logs.ts";
 import { setApplicationMenu } from "@/main/menu.ts";
 import { stopWatchingFinchLogs, watchFinchLogs } from "@/main/finchLogTail.ts";
 import { restoreThemePreference } from "@/main/theme.ts";
+
+import windowIcon from "../../assets/icon.png";
 
 // Security model. The window is treated as untrusted: it shows data from the
 // API, so everything it can reach is decided here and nothing is left to the
@@ -175,6 +178,9 @@ function createWindow(): void {
     minHeight: 600,
     frame: false,
     backgroundColor: windowBackground(),
+    ...(process.platform === "linux"
+      ? { icon: nativeImage.createFromDataURL(windowIcon) }
+      : {}),
     webPreferences: {
       preload,
       v8CacheOptions: "bypassHeatCheck",
