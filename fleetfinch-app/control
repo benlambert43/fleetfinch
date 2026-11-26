@@ -1,0 +1,12 @@
+Package: com.fleetfinch.app
+Name: Fleet Finch
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Cleans up, patches and extends iOS 9 devices
+ The main Fleet Finch app: utilities to remove stock apps, stock services and
+ Cydia, patch the system and its certificates, an app store for apps, tools
+ and extensions, and settings the stock Settings app does not have.
+Maintainer: FleetFinch
+Author: FleetFinch
+Section: Utilities
+Depends: firmware (>= 9.0)

@@ -11,6 +11,7 @@ A software suite designed to bring modern functionality to iOS 9.3.5 and iOS 9.3
 | `fleetfinch-desktop` | FleetFinch Developer, the Electron desktop app, built from the shared components |
 | `fleetfinch-lite`    | Plain HTML, CSS, and JS site for Safari 9, with its own lint configs             |
 | `fleetfinch-logs`    | Finch Logs: an iOS 9 logging service and app for the device, built with Theos    |
+| `fleetfinch-app`     | Fleet Finch: the main iOS 9 app for the device, built with Theos                 |
 
 ## Getting started
 
@@ -56,6 +57,7 @@ Run everything from the repository root.
 | `npm run build:desktop` | Packages the desktop app for this machine into `fleetfinch-desktop/out`                    |
 | `npm run make:desktop`  | Packages the desktop app and zips it into `fleetfinch-desktop/out/make`, ready to hand out |
 | `npm run build:logs`    | Builds the Finch Logs package for iOS 9 into `fleetfinch-logs/packages`, using Theos       |
+| `npm run build:app`     | Builds the Fleet Finch package for iOS 9 into `fleetfinch-app/packages`, using Theos       |
 
 Nothing is compiled during development. Node.js runs the server's TypeScript directly, and shared code is imported straight from its sources. Between the API and the web app, only the web app has a build step.
 

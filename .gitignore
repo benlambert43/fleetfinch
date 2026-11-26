@@ -9,6 +9,8 @@ fleetfinch-desktop/.vite/
 fleetfinch-desktop/out/
 fleetfinch-logs/.theos/
 fleetfinch-logs/packages/
+fleetfinch-app/.theos/
+fleetfinch-app/packages/
 coverage/
 
 *.tsbuildinfo
