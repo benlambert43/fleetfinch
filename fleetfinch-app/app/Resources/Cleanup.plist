@@ -3879,11 +3879,113 @@
 		</dict>
 		<dict>
 			<key>id</key>
+			<string>files-online</string>
+			<key>title</key>
+			<string>Leftovers of iCloud and Online Services</string>
+			<key>about</key>
+			<string>Small programs, sign-in plug-ins, settings panels and lock screen plug-ins of iCloud, Apple ID, Find My iPad, Wallet, Mail, the social networks and the Apple Watch, which nothing on the device has used.</string>
+			<key>paths</key>
+			<array>
+				<string>/System/Library/Frameworks/PassKit.framework/passd</string>
+				<string>/usr/libexec/findmydeviced-nano-support</string>
+				<string>/System/Library/PrivateFrameworks/VisualVoicemail.framework/vmd</string>
+				<string>/System/Library/PrivateFrameworks/MapsSupport.framework/nanomapscd</string>
+				<string>/System/Library/PrivateFrameworks/MapsSupport.framework/navd</string>
+				<string>/System/Library/PrivateFrameworks/CoreSuggestions.framework/Tools/suggest_tool</string>
+				<string>/System/Library/PrivateFrameworks/NanoPreferencesSync.framework/nanoprefsyncd</string>
+				<string>/System/Library/PrivateFrameworks/Weather.framework/Support/nanoweatherprefsd</string>
+				<string>/usr/bin/brctl</string>
+				<string>/System/Library/PrivateFrameworks/VoiceMemos.framework/Support/voicememod</string>
+				<string>/System/Library/PrivateFrameworks/CarKit.framework/Support/carkitd</string>
+				<string>/usr/libexec/mailq</string>
+				<string>/System/Library/PrivateFrameworks/ParsecSubscriptionServiceSupport.framework/Versions/A/Support/psssd</string>
+				<string>/System/Library/PrivateFrameworks/StoreBookkeeper.framework/GenerateSymbolSwizzles</string>
+				<string>/System/Library/PrivateFrameworks/Symptoms.framework/Frameworks/SymptomEvaluator.framework/PlistAmalgamator.pl</string>
+				<string>/System/Library/PrivateFrameworks/CloudServices.framework/XPCServices/com.apple.sbd.xpc</string>
+				<string>/System/Library/PrivateFrameworks/CloudServices.framework/Frameworks/EscrowService.framework/XPCServices/com.apple.lakitu.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.weibo.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.tencentweibo.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.facebook.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.twitter.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.flickr.xpc</string>
+				<string>/System/Library/Frameworks/Social.framework/XPCServices/com.apple.vimeo.xpc</string>
+				<string>/System/Library/PrivateFrameworks/CloudDocsDaemon.framework/XPCServices/ContainerMetadataExtractor.xpc</string>
+				<string>/System/Library/PrivateFrameworks/IMTranscoding.framework/XPCServices/IMTranscoderAgent.xpc</string>
+				<string>/System/Library/PrivateFrameworks/iOSDiagnostics.framework/XPCServices/com.apple.DiagnosticsSessionAvailibility.xpc</string>
+				<string>/System/Library/PrivateFrameworks/FMFUI.framework/XPCServices/FMFUIXPCService.xpc</string>
+				<string>/System/Library/PrivateFrameworks/FindMyDevice.framework/XPCServices/FindMyDeviceHelperXPCService.xpc</string>
+				<string>/System/Library/PrivateFrameworks/AOSNotification.framework/XPCServices/AOSNotificationMigratorXPCService.xpc</string>
+				<string>/System/Library/PrivateFrameworks/ClassroomKit.framework/XPCServices/ScreenshotService.xpc</string>
+				<string>/System/Library/Frameworks/MapKit.framework/XPCServices/com.apple.MapKit.SnapshotService.xpc</string>
+				<string>/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework/XPCServices/com.apple.MobileSoftwareUpdate.CleanupPreparePathService.xpc</string>
+				<string>/System/Library/PreferenceBundles/AccountSettings/iCloudDriveSettings.bundle</string>
+				<string>/System/Library/PreferenceBundles/AccountSettings/OSXServerSettings.bundle</string>
+				<string>/System/Library/PreferenceBundles/AccountSettings/CloudKitSettings.bundle</string>
+				<string>/System/Library/SpringBoardPlugins/InCallLockScreen.lockbundle</string>
+				<string>/System/Library/SpringBoardPlugins/FindMyiPhoneLockScreen.lockbundle</string>
+				<string>/System/Library/SpringBoardPlugins/PassesLockScreenPlugin.lockbundle</string>
+				<string>/Library/Application Support/Mail/Plugins/MailAttachmentPlugin.webplugin</string>
+				<string>/Library/Application Support/AdSheet/MapWebKitPlugin.webplugin</string>
+				<string>/System/Library/StockholmPlugins/RemoteAdminConnection.plugin</string>
+				<string>/System/Library/UsageBundles/MusicUsage.bundle</string>
+				<string>/System/Library/UsageBundles/VideosUsage.bundle</string>
+				<string>/System/Library/UsageBundles/CalendarUsage.bundle</string>
+				<string>/System/Library/UsageBundles/ContactsUsage.bundle</string>
+				<string>/System/Library/UsageBundles/MailUsage.bundle</string>
+				<string>/System/Library/UsageBundles/MessagesUsagePreferencesPlugin.bundle</string>
+				<string>/System/Library/UsageBundles/ToneSettingsUsage.bundle</string>
+				<string>/System/Library/UsageBundles/SoftwareUpdateUsageBundle.bundle</string>
+				<string>/System/Library/Accounts/Authentication/AppleIDAuthentication.bundle</string>
+				<string>/System/Library/Accounts/Authentication/AppleIDAuthenticationDelegates/AppleAccountAuthenticationDelegate.bundle</string>
+				<string>/System/Library/Accounts/Authentication/AppleIDAuthenticationDelegates/GameCenterAppleIDAuthenticationDelegate.bundle</string>
+				<string>/System/Library/Accounts/Authentication/AppleIDAuthenticationDelegates/IDSAuthenticationDelegatePlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/AppleIDSSOAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/CloudKitAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/DAAccountAuthenticator.bundle</string>
+				<string>/System/Library/Accounts/Authentication/FacebookAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/FlickrAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/GoogleAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/MessageAccountAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/ServerAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/TencentWeiboAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/TwitterAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/VimeoAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/WeiboAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Authentication/YahooAuthenticationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Access/CloudKitAccessPlugin.bundle</string>
+				<string>/System/Library/Accounts/Access/FacebookAccessPlugin.bundle</string>
+				<string>/System/Library/Accounts/Access/TencentWeiboAccessPlugin.bundle</string>
+				<string>/System/Library/Accounts/AppleIDLoginPlugins/ISLoginPlugin.bundle</string>
+				<string>/System/Library/Accounts/AppleIDLoginPlugins/iCloudAppleIDLoginPlugin.bundle</string>
+				<string>/System/Library/Accounts/DataclassOwners/Bookmarks.bundle</string>
+				<string>/System/Library/Accounts/DataclassOwners/Calendar.bundle</string>
+				<string>/System/Library/Accounts/DataclassOwners/Contacts.bundle</string>
+				<string>/System/Library/Accounts/DataclassOwners/News.bundle</string>
+				<string>/System/Library/Accounts/DataclassOwners/Notes.bundle</string>
+				<string>/System/Library/Accounts/Notification/AAAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/AOSNotificationAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/AppleIDSSONotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/CloudDocsAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/CloudKitNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/DAAccountNotifier.bundle</string>
+				<string>/System/Library/Accounts/Notification/FindMyDeviceAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/IDSAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/MessageAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/MobileSyncAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/NotesAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/PCSAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/PhotosAccountNotificationPlugin.bundle</string>
+				<string>/System/Library/Accounts/Notification/SecureBackupNotification.bundle</string>
+				<string>/System/Library/Accounts/Notification/SocialAccountNotificationPlugin.bundle</string>
+			</array>
+		</dict>
+		<dict>
+			<key>id</key>
 			<string>services-update</string>
 			<key>title</key>
 			<string>Software Update and Diagnostics</string>
 			<key>about</key>
-			<string>The services that look for iOS updates and that gather and send usage and diagnostic reports to Apple. Crash reports are still written.</string>
+			<string>The services that look for updates to iOS and to its time zone data, and that gather and send usage and diagnostic reports to Apple. Crash reports are still written.</string>
 			<key>paths</key>
 			<array>
 				<string>/System/Library/LaunchDaemons/com.apple.mobile.softwareupdated.plist</string>
@@ -3902,6 +4004,10 @@
 				<string>/System/Library/LaunchDaemons/com.apple.CrashHousekeeping.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.OTACrashCopier.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.ProxiedCrashCopier.ProxyingDevice.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.timezoneupdates.tzd.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.pluginkit.pkreporter.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.prdaily.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.corecaptured.plist</string>
 			</array>
 		</dict>
 		<dict>
@@ -3972,7 +4078,7 @@
 			<key>title</key>
 			<string>Stores, Media Library and Sync</string>
 			<key>about</key>
-			<string>The services behind the App Store, iTunes Store, Music, Game Center, Home, Health, Maps, Tips, iTunes sync, and the calendar, contacts and photo libraries of the removed apps.</string>
+			<string>The services behind the App Store, iTunes Store, Music, Game Center, Home, Health, Maps, Tips, iTunes sync, the stores' copy protection, and the calendar, contacts and photo libraries of the removed apps.</string>
 			<key>paths</key>
 			<array>
 				<string>/System/Library/LaunchDaemons/com.apple.itunesstored.plist</string>
@@ -4009,6 +4115,10 @@
 				<string>/System/Library/LaunchDaemons/com.apple.ABDatabaseDoctor.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.replayd.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.midiserver-ios.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.fairplayd.A1.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.lskdd.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.lskdmsed.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.mdt.plist</string>
 			</array>
 		</dict>
 		<dict>
@@ -4017,7 +4127,7 @@
 			<key>title</key>
 			<string>Other Services Not in Use</string>
 			<key>about</key>
-			<string>Services of features nothing on this device uses: the set-up helper, device management, VPN and hotspot helpers, search, shared web passwords, asset downloads, usage prediction and the location extras that only apps used. Location itself, Bluetooth and accessory support stay.</string>
+			<string>Services of features nothing on this device uses: the set-up helper, device management, VPN and hotspot helpers, search, shared web passwords, asset downloads, usage prediction, storage on camera adapters and the location extras that only apps used.</string>
 			<key>paths</key>
 			<array>
 				<string>/System/Library/LaunchDaemons/com.apple.purplebuddy.budd.plist</string>
@@ -4064,6 +4174,29 @@
 				<string>/System/Library/LaunchDaemons/com.apple.routined.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.pipelined.plist</string>
 				<string>/System/Library/LaunchDaemons/com.apple.geod.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.filesystems.userfsd.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.filesystems.userfs_helper.plist</string>
+			</array>
+		</dict>
+		<dict>
+			<key>id</key>
+			<string>services-cellular</string>
+			<key>title</key>
+			<string>Cellular Helpers</string>
+			<key>about</key>
+			<string>The helpers the cellular service starts for carrier settings and carrier updates, on an iPad without a cellular radio. The cellular service itself stays, because the Home screen asks for it without pause when it is gone.</string>
+			<key>paths</key>
+			<array>
+				<string>/System/Library/LaunchDaemons/com.apple.CommCenterMobileHelper.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.CommCenterRootHelper.plist</string>
+				<string>/System/Library/LaunchDaemons/com.apple.DMHelper.plist</string>
+				<string>/System/Library/Frameworks/CoreTelephony.framework/Support/CommCenterMobileHelper</string>
+				<string>/System/Library/Frameworks/CoreTelephony.framework/Support/CommCenterRootHelper</string>
+				<string>/System/Library/Frameworks/CoreTelephony.framework/Support/DMHelper</string>
+			</array>
+			<key>models</key>
+			<array>
+				<string>iPad2,1</string>
 			</array>
 		</dict>
 		<dict>
@@ -4207,6 +4340,16 @@
 				<string>/usr/libexec/routined</string>
 				<string>/usr/libexec/pipelined</string>
 				<string>/System/Library/PrivateFrameworks/GeoServices.framework/geod</string>
+				<string>/usr/libexec/tzd</string>
+				<string>/usr/libexec/pkreporter</string>
+				<string>/System/Library/CoreServices/prdaily</string>
+				<string>/usr/libexec/corecaptured</string>
+				<string>/usr/sbin/fairplayd.A1</string>
+				<string>/usr/libexec/lskdd</string>
+				<string>/usr/libexec/lskdmsed</string>
+				<string>/usr/libexec/transitd</string>
+				<string>/System/Library/PrivateFrameworks/UserFS.framework/userfsd</string>
+				<string>/System/Library/PrivateFrameworks/UserFS.framework/userfs_helper</string>
 			</array>
 		</dict>
 	</array>

@@ -16,5 +16,7 @@
   <true/>
   <key>com.apple.wifi.manager-access</key>
   <true/>
+  <key>com.apple.springboard.iconState</key>
+  <true/>
 </dict>
 </plist>

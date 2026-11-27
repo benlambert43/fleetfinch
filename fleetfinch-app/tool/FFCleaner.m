@@ -11,6 +11,7 @@
 #import <sys/wait.h>
 #import <unistd.h>
 
+#import "FFArrangement.h"
 #import "FFCleanup.h"
 #import "FFCopy.h"
 #import "FFHealth.h"
@@ -32,6 +33,7 @@ static NSString *const FFLockPath = @"/private/var/FleetFinch/lock";
 static NSString *const FFLogPath = @"/private/var/FleetFinch/cleanup.log";
 static NSString *const FFSystemServices = @"/System/Library/LaunchDaemons";
 static NSString *const FFAddedServices = @"/Library/LaunchDaemons";
+static NSString *const FFAppsFolder = @"/Applications";
 static NSString *const FFGuardedPrefix = @"com.apple.jetsamproperties.";
 static NSString *const FFAppsNotice = @"com.apple.mobile.application_installed";
 static const int FFRestartNow = 0;
@@ -408,6 +410,12 @@ static NSArray<NSString *> *FFSelect(NSArray<NSString *> *words, NSString **unkn
   return paths.array;
 }
 
+static int FFFailUnknown(NSString *word) {
+  return FFFail([NSString stringWithFormat:@"%@ is neither a group nor a path on the cleanup "
+                                           @"list",
+                                           word]);
+}
+
 static NSString *FFRemoveOne(NSString *path, NSNumber *batch, uint64_t *freed) {
   NSFileManager *manager = [NSFileManager defaultManager];
   NSString *kept = FFKeptPath(path);
@@ -510,6 +518,33 @@ static int FFRefuseReadOnly(NSString *verb) {
   return 1;
 }
 
+static BOOL FFHasIcon(NSString *path) {
+  return [path.pathExtension isEqualToString:@"app"] &&
+         [path.stringByDeletingLastPathComponent isEqualToString:FFAppsFolder];
+}
+
+static BOOL FFAppsAreWhole(void) {
+  NSString *unknown = nil;
+  for (NSString *path in FFSelect(@[], &unknown)) {
+    if (FFHasIcon(path) && FFStateOfPath(path) == FFItemRemoved) {
+      return NO;
+    }
+  }
+  return YES;
+}
+
+static NSArray<NSString *> *FFAppIdentifiers(NSArray<NSString *> *paths) {
+  NSMutableArray<NSString *> *identifiers = [NSMutableArray new];
+  for (NSString *path in paths) {
+    NSString *file = [path stringByAppendingPathComponent:@"Info.plist"];
+    NSString *identifier = [NSDictionary dictionaryWithContentsOfFile:file][@"CFBundleIdentifier"];
+    if ([identifier isKindOfClass:[NSString class]]) {
+      [identifiers addObject:identifier];
+    }
+  }
+  return identifiers;
+}
+
 static int FFRemove(NSArray<NSString *> *words) {
   if (!FFMakeSystemVolumeWritable()) {
     return FFRefuseReadOnly(FFVerbRemove);
@@ -517,9 +552,7 @@ static int FFRemove(NSArray<NSString *> *words) {
   NSString *unknown = nil;
   NSArray<NSString *> *chosen = FFSelect(words, &unknown);
   if (chosen == nil) {
-    return FFFail([NSString stringWithFormat:@"%@ is neither a group nor a path on the cleanup "
-                                             @"list",
-                                             unknown]);
+    return FFFailUnknown(unknown);
   }
   NSSet<NSString *> *listed = [NSSet setWithArray:FFSelect(@[], &unknown) ?: @[]];
   NSMutableArray<NSString *> *paths = [NSMutableArray new];
@@ -543,8 +576,18 @@ static int FFRemove(NSArray<NSString *> *words) {
   uint64_t freed = 0;
   NSUInteger removed = 0;
   BOOL apps = NO;
+  BOOL leaving = NO;
+  for (NSString *path in paths) {
+    leaving = leaving || FFHasIcon(path);
+  }
   FFSay(@"Removing %@ as batch %@. Before: %@.", FFThings(paths.count), identifier,
         FFReachSentence(reach));
+  if (leaving && FFAppsAreWhole()) {
+    FFSay(@"%@", FFSaveArrangement()
+                   ? @"The Home screen's arrangement was saved, to be put back with the apps."
+                   : @"The Home screen's arrangement could not be read, so it will not be put "
+                     @"back with the apps.");
+  }
   NSMutableDictionary *batch = [@{
     @"id" : identifier,
     @"at" : started,
@@ -633,6 +676,7 @@ static NSUInteger FFRestorePaths(NSArray<NSString *> *wanted, NSString *why,
   NSDate *last = nil;
   NSUInteger restored = 0;
   BOOL apps = NO;
+  NSMutableArray<NSString *> *returned = [NSMutableArray new];
   FFSay(@"Putting %@ back, %@.", FFThings(paths.count), why);
   NSMutableArray<NSString *> *waiting = paths;
   NSUInteger before = NSNotFound;
@@ -650,6 +694,9 @@ static NSUInteger FFRestorePaths(NSArray<NSString *> *wanted, NSString *why,
         } else {
           restored += 1;
           apps = apps || FFTouchesApps(path);
+          if (FFHasIcon(path)) {
+            [returned addObject:path];
+          }
           FFSay(@"Put back %@", path);
         }
       }
@@ -661,6 +708,17 @@ static NSUInteger FFRestorePaths(NSArray<NSString *> *wanted, NSString *why,
   }
   if (apps) {
     FFRebuildApps();
+  }
+  if (returned.count > 0 && FFAppsAreWhole()) {
+    if (!FFHasSavedArrangement()) {
+      FFSay(@"No arrangement of the Home screen had been saved, so the apps are where iOS put "
+            @"them.");
+    } else if (FFRestoreArrangement(FFAppIdentifiers(returned))) {
+      FFSay(@"The Home screen's arrangement was put back.");
+    } else {
+      FFSay(@"The Home screen's arrangement could not be put back; the apps are where iOS put "
+            @"them.");
+    }
   }
   FFMarkRestored(FFJournal(), why);
   return restored;
@@ -684,9 +742,7 @@ static int FFRestore(NSArray<NSString *> *words) {
   NSString *unknown = nil;
   NSArray<NSString *> *chosen = words.count > 0 ? FFSelect(words, &unknown) : nil;
   if (words.count > 0 && chosen == nil) {
-    return FFFail([NSString stringWithFormat:@"%@ is neither a group nor a path on the cleanup "
-                                             @"list",
-                                             unknown]);
+    return FFFailUnknown(unknown);
   }
   NSSet<NSString *> *asked = chosen == nil ? nil : [NSSet setWithArray:chosen];
   NSMutableArray<NSString *> *wanted = [NSMutableArray new];
@@ -936,6 +992,10 @@ int FFCleanupCommand(NSArray<NSString *> *arguments) {
   }
   if (getuid() != 0) {
     return FFFail([NSString stringWithFormat:@"only root may %@ a part of iOS", verb]);
+  }
+  NSString *unknown = nil;
+  if (words.count > 0 && FFSelect(words, &unknown) == nil) {
+    return FFFailUnknown(unknown);
   }
   int asked = FFAskHelper(verb, words);
   if (asked >= 0) {
