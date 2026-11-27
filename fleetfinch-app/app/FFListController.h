@@ -5,11 +5,20 @@
 @property(nonatomic, copy) NSString *title;
 @property(nonatomic, copy) NSString *detail;
 @property(nonatomic, copy) NSString *about;
+@property(nonatomic, copy) void (^action)(void);
+@property(nonatomic) BOOL button;
+@property(nonatomic) BOOL destructive;
 
 + (instancetype)rowWithTitle:(NSString *)title detail:(NSString *)detail;
 + (instancetype)rowWithTitle:(NSString *)title
                       detail:(NSString *)detail
                        about:(NSString *)about;
++ (instancetype)rowWithTitle:(NSString *)title
+                      detail:(NSString *)detail
+                      action:(void (^)(void))action;
++ (instancetype)buttonWithTitle:(NSString *)title
+                    destructive:(BOOL)destructive
+                         action:(void (^)(void))action;
 
 @end
 

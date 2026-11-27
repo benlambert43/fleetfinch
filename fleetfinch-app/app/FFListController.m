@@ -21,6 +21,23 @@ static NSString *const FFCellIdentifier = @"row";
   return row;
 }
 
++ (instancetype)rowWithTitle:(NSString *)title
+                      detail:(NSString *)detail
+                      action:(void (^)(void))action {
+  FFRow *row = [self rowWithTitle:title detail:detail about:nil];
+  row.action = action;
+  return row;
+}
+
++ (instancetype)buttonWithTitle:(NSString *)title
+                    destructive:(BOOL)destructive
+                         action:(void (^)(void))action {
+  FFRow *row = [self rowWithTitle:title detail:nil action:action];
+  row.button = YES;
+  row.destructive = destructive;
+  return row;
+}
+
 @end
 
 @implementation FFSection
@@ -90,21 +107,29 @@ static NSString *const FFCellIdentifier = @"row";
   FFRow *row = [self rowAtIndexPath:indexPath];
   cell.textLabel.text = row.title;
   cell.detailTextLabel.text = row.detail;
-  BOOL opens = row.about != nil;
-  cell.accessoryType = opens ? UITableViewCellAccessoryDisclosureIndicator
-                             : UITableViewCellAccessoryNone;
-  cell.selectionStyle = opens ? UITableViewCellSelectionStyleDefault
-                              : UITableViewCellSelectionStyleNone;
+  BOOL acts = row.about != nil || row.action != nil;
+  UIColor *ink = row.destructive ? FFWarningColor() : FFTintColor();
+  cell.textLabel.textColor = row.button ? ink : [UIColor blackColor];
+  cell.accessoryType = acts && !row.button ? UITableViewCellAccessoryDisclosureIndicator
+                                           : UITableViewCellAccessoryNone;
+  cell.selectionStyle = acts ? UITableViewCellSelectionStyleDefault
+                             : UITableViewCellSelectionStyleNone;
   return cell;
 }
 
 - (NSIndexPath *)tableView:(UITableView *)tableView
   willSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-  return [self rowAtIndexPath:indexPath].about != nil ? indexPath : nil;
+  FFRow *row = [self rowAtIndexPath:indexPath];
+  return row.about != nil || row.action != nil ? indexPath : nil;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
   FFRow *row = [self rowAtIndexPath:indexPath];
+  if (row.action != nil) {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    row.action();
+    return;
+  }
   FFPlaceholderController *placeholder =
     [[FFPlaceholderController alloc] initWithTitle:row.title about:row.about];
   [self.navigationController pushViewController:placeholder animated:YES];

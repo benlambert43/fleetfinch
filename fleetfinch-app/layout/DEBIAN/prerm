@@ -1,0 +1,5 @@
+#!/bin/sh
+for name in helper reach; do
+  launchctl unload /Library/LaunchDaemons/com.fleetfinch.app.$name.plist >/dev/null 2>&1
+done
+exit 0

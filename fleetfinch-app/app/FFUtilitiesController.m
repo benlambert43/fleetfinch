@@ -1,12 +1,21 @@
 #import "FFUtilitiesController.h"
 
+#import "FFCleanupController.h"
+
 @implementation FFUtilitiesController
 
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  [self reload];
+}
+
 - (NSArray<FFSection *> *)buildSections {
+  __weak FFUtilitiesController *weak = self;
   return @[
     [FFSection sectionWithTitle:@"Progress"
                            rows:@[
-                             [FFRow rowWithTitle:@"Stock apps and services" detail:@"Not checked"],
+                             [FFRow rowWithTitle:@"Stock apps and services"
+                                          detail:FFCleanupSummary()],
                              [FFRow rowWithTitle:@"Cydia" detail:@"Not checked"],
                              [FFRow rowWithTitle:@"Patches" detail:@"Not checked"],
                              [FFRow rowWithTitle:@"Updates" detail:@"Not checked"],
@@ -18,8 +27,11 @@
                   rows:@[
                     [FFRow rowWithTitle:@"Stock Apps and Services"
                                  detail:nil
-                                  about:@"Removes as many of the stock apps and stock services as "
-                                        @"the device can run without."],
+                                 action:^{
+                                   [weak.navigationController
+                                     pushViewController:[FFCleanupController new]
+                                               animated:YES];
+                                 }],
                     [FFRow rowWithTitle:@"Cydia"
                                  detail:nil
                                   about:@"Removes the Cydia app and the software components that "

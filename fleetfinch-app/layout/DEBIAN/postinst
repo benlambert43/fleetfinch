@@ -1,0 +1,12 @@
+#!/bin/sh
+requests=/private/var/mobile/Library/FleetFinch/Requests
+mkdir -p "$requests"
+chown -R mobile:mobile /private/var/mobile/Library/FleetFinch
+for name in helper reach; do
+  service=/Library/LaunchDaemons/com.fleetfinch.app.$name.plist
+  launchctl unload "$service" >/dev/null 2>&1
+  if ! launchctl load "$service"; then
+    echo "Fleet Finch is installed, but its $name service did not load. It will when the device next restarts."
+  fi
+done
+exit 0

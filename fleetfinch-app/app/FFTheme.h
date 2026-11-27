@@ -9,4 +9,5 @@ typedef NS_ENUM(NSInteger, FFIcon) {
 
 UIColor *FFTintColor(void);
 UIColor *FFMutedColor(void);
+UIColor *FFWarningColor(void);
 UIImage *FFTabIcon(FFIcon icon);

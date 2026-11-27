@@ -15,6 +15,10 @@ UIColor *FFMutedColor(void) {
   return FFHex(0x5f6781);
 }
 
+UIColor *FFWarningColor(void) {
+  return FFHex(0xa3291a);
+}
+
 static void FFStroke(UIBezierPath *path) {
   path.lineWidth = 2;
   path.lineCapStyle = kCGLineCapRound;

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.fleetfinch.app.helper</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/fleetfinch</string>
+    <string>serve</string>
+  </array>
+  <key>UserName</key>
+  <string>root</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>QueueDirectories</key>
+  <array>
+    <string>/private/var/mobile/Library/FleetFinch/Requests</string>
+  </array>
+  <key>Nice</key>
+  <integer>-20</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>ExitTimeOut</key>
+  <integer>30</integer>
+</dict>
+</plist>
